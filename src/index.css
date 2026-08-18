@@ -1,0 +1,202 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   AurumPulse AI — Design System
+   Premium dark-first institutional fintech aesthetic.
+   ============================================================ */
+
+@theme {
+  /* Base surfaces — deep graphite → near black */
+  --color-base-950: #07080a;
+  --color-base-900: #0a0b0e;
+  --color-base-850: #0e1015;
+  --color-base-800: #12141a;
+  --color-base-750: #171a21;
+  --color-base-700: #1d212a;
+  --color-base-600: #272c37;
+  --color-base-500: #363c49;
+
+  /* Text */
+  --color-ink-100: #f4f5f7;
+  --color-ink-200: #d7dae1;
+  --color-ink-300: #a8aeba;
+  --color-ink-400: #7c8290;
+  --color-ink-500: #565c68;
+
+  /* Gold — metallic champagne */
+  --color-gold-100: #f8e9bf;
+  --color-gold-200: #f0d799;
+  --color-gold-300: #e8c877;
+  --color-gold-400: #d9b86b;
+  --color-gold-500: #c39d4f;
+  --color-gold-600: #a8843c;
+
+  /* Sentiment */
+  --color-bull-400: #4fd39a;
+  --color-bull-500: #35b47f;
+  --color-bull-600: #268a61;
+  --color-bear-400: #f0736c;
+  --color-bear-500: #e0554e;
+  --color-bear-600: #b83f39;
+  --color-neutral-400: #e0b866;
+  --color-neutral-500: #c99f4d;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', monospace;
+
+  --radius-panel: 14px;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: color-mix(in oklab, #ffffff 8%, transparent);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 78% -10%, rgba(217, 184, 107, 0.06), transparent 60%),
+      radial-gradient(900px 500px at 12% 0%, rgba(53, 180, 127, 0.035), transparent 55%),
+      var(--color-base-900);
+    color: var(--color-ink-200);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+  }
+
+  /* Tabular figures everywhere numbers matter */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'ss01' 1;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background: rgba(232, 200, 119, 0.25);
+  }
+}
+
+@layer components {
+  /* Glass panel — used sparingly for the premium accent surfaces */
+  .glass {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0) 40%),
+      color-mix(in oklab, var(--color-base-800) 82%, transparent);
+    backdrop-filter: blur(14px) saturate(1.1);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .panel {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(0, 0, 0, 0.06));
+    background-color: var(--color-base-850);
+    border: 1px solid rgba(255, 255, 255, 0.055);
+    border-radius: var(--radius-panel);
+  }
+
+  .panel-inset {
+    background-color: var(--color-base-800);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+  }
+
+  .gold-text {
+    background: linear-gradient(180deg, #f8e9bf, #d9b86b 60%, #b8923f);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .gold-ring {
+    box-shadow: 0 0 0 1px rgba(217, 184, 107, 0.35), 0 0 24px -6px rgba(217, 184, 107, 0.35);
+  }
+
+  .hairline {
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 9px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.42rem 0.7rem;
+    color: var(--color-ink-300);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--color-base-800);
+    transition: all 0.16s ease;
+    cursor: pointer;
+    user-select: none;
+  }
+  .btn:hover {
+    color: var(--color-ink-100);
+    border-color: rgba(255, 255, 255, 0.12);
+    background: var(--color-base-750);
+  }
+  .btn-active {
+    color: var(--color-base-950);
+    background: linear-gradient(180deg, #f0d799, #d9b86b);
+    border-color: transparent;
+    font-weight: 600;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.82); }
+}
+.live-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+@keyframes sheen {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+.sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.09) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: sheen 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  animation: fade-up 0.4s ease both;
+}
