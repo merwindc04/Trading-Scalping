@@ -9,6 +9,7 @@ import { computeStrength, type StrengthReport } from '@/lib/engines/strength'
 import { findHistoricalAnalogues, type HistoricalReport } from '@/lib/engines/historical'
 import { buildForecast, type ForecastReport } from '@/lib/engines/forecast'
 import { buildExplanation, type ExplanationReport } from '@/lib/engines/explain'
+import { evaluateSignal, type SignalReport } from '@/lib/engines/signal'
 
 /* ============================================================
    analyze() — the ensemble orchestrator (spec §33).
@@ -66,6 +67,7 @@ export interface Analysis {
   mtf: MTFReport
   explanation: ExplanationReport
   setup: TradeSetup
+  signal: SignalReport
   generatedAt: number
 }
 
@@ -222,6 +224,31 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     horizon: primary.durationLabel,
   }
 
+  const signal = evaluateSignal({
+    symbol,
+    price: last.close,
+    strengthOverall: strength.overall,
+    direction: strength.direction,
+    bull: forecast.bull,
+    bear: forecast.bear,
+    confidence: forecast.confidence,
+    rsi: snap.rsi,
+    momentumScore: technical.momentumScore,
+    mtfAlignment: mtf.alignmentPct,
+    mtfDominant: mtf.dominant,
+    patternName: pattern.name,
+    patternDirection: pattern.direction,
+    breakoutLevel: pattern.breakoutLevel,
+    trendLabel: structure.trendLabel,
+    structureTrend: structure.trend,
+    entryLow: setup.entryLow,
+    entryHigh: setup.entryHigh,
+    stop: setup.invalidation,
+    targets: setup.targets,
+    riskReward: setup.riskReward,
+    horizon: setup.horizon,
+  })
+
   return {
     symbol,
     symbolName: asset.name,
@@ -241,6 +268,7 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     mtf,
     explanation,
     setup,
+    signal,
     generatedAt: Date.now(),
   }
 }

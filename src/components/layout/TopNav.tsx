@@ -11,7 +11,20 @@ const TIMEFRAMES: Timeframe[] = ['1m', '3m', '5m', '15m', '30m', '1H', '4H', '1D
 const STYLES: TradingStyle[] = ['SCALP', 'INTRADAY', 'SWING', 'INVEST']
 
 export function TopNav({ price, changePct, source }: { price: number | null; changePct: number | null; source: 'live' | 'demo' }) {
-  const { nav, setNav, symbol, setSymbol, timeframe, setTimeframe, style, setStyle, toggleChat } = useAppStore()
+  const { nav, setNav, symbol, setSymbol, timeframe, setTimeframe, style, setStyle, toggleChat, notifyEnabled, setNotify } = useAppStore()
+
+  async function toggleNotify() {
+    if (notifyEnabled) {
+      setNotify(false)
+      return
+    }
+    setNotify(true)
+    try {
+      if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission()
+    } catch {
+      /* ignore */
+    }
+  }
   const [assetOpen, setAssetOpen] = useState(false)
   const asset = ASSETS[symbol]
   const up = (changePct ?? 0) >= 0
@@ -130,8 +143,12 @@ export function TopNav({ price, changePct, source }: { price: number | null; cha
           ))}
         </div>
 
-        <button className="btn hidden !px-2 md:inline-flex" title="Alerts">
-          <Bell size={15} />
+        <button
+          onClick={toggleNotify}
+          className={`btn hidden !px-2 md:inline-flex ${notifyEnabled ? '!border-gold-500/40 !text-gold-200' : ''}`}
+          title={notifyEnabled ? 'Buy/sell alerts on' : 'Enable buy/sell alerts'}
+        >
+          <Bell size={15} className={notifyEnabled ? 'text-gold-300' : ''} />
         </button>
         <button onClick={toggleChat} className="btn !px-2" title="AI Assistant">
           <MessageSquare size={15} className="text-gold-300" />

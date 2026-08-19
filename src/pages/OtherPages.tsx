@@ -3,6 +3,7 @@ import { Bell, BookOpen, Clock, LineChart, Settings as SettingsIcon, Database, L
 import type { LiveState } from '@/hooks/useAnalysis'
 import { ChartCard } from '@/components/chart/ChartCard'
 import { ScenarioPanel } from '@/components/panels/ScenarioPanel'
+import { SignalPanel } from '@/components/panels/SignalPanel'
 import { ExplainPanel } from '@/components/panels/ExplainPanel'
 import { HistoricalPanel } from '@/components/panels/HistoricalPanel'
 import { MarketStrengthPanel } from '@/components/panels/MarketStrengthPanel'
@@ -23,6 +24,7 @@ export function ForecastPage({ live }: { live: LiveState }) {
       <aside className="flex flex-col gap-2 lg:overflow-y-auto scrollbar-thin">
         {live.analysis && (
           <>
+            <SignalPanel analysis={live.analysis} />
             <ScenarioPanel analysis={live.analysis} />
             <ExplainPanel analysis={live.analysis} />
           </>

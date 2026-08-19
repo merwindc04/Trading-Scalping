@@ -1,6 +1,7 @@
 import type { LiveState } from '@/hooks/useAnalysis'
 import { Watchlist } from '@/components/layout/Watchlist'
 import { ChartCard } from '@/components/chart/ChartCard'
+import { SignalPanel } from '@/components/panels/SignalPanel'
 import { MarketStrengthPanel } from '@/components/panels/MarketStrengthPanel'
 import { ScenarioPanel } from '@/components/panels/ScenarioPanel'
 import { PatternPanel } from '@/components/panels/PatternPanel'
@@ -37,6 +38,7 @@ export function Dashboard({ live }: { live: LiveState }) {
           <aside className="order-2 flex flex-col gap-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:overflow-y-auto lg:pr-0.5 scrollbar-thin">
             {analysis && (
               <>
+                <SignalPanel analysis={analysis} />
                 <MarketStrengthPanel analysis={analysis} />
                 <ScenarioPanel analysis={analysis} />
                 <PatternPanel analysis={analysis} />

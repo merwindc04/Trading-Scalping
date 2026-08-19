@@ -37,6 +37,7 @@ interface AppState {
   overlays: OverlayToggles
   scenarioView: ScenarioView
   chatOpen: boolean
+  notifyEnabled: boolean
 
   setNav: (n: NavKey) => void
   setSymbol: (s: string) => void
@@ -45,6 +46,7 @@ interface AppState {
   toggleOverlay: (k: keyof OverlayToggles) => void
   setScenarioView: (v: ScenarioView) => void
   toggleChat: () => void
+  setNotify: (v: boolean) => void
 }
 
 const STYLE_DEFAULT_TF: Record<TradingStyle, Timeframe> = {
@@ -72,6 +74,7 @@ export const useAppStore = create<AppState>((set) => ({
   },
   scenarioView: 'all',
   chatOpen: false,
+  notifyEnabled: false,
 
   setNav: (nav) => set({ nav }),
   setSymbol: (symbol) => set({ symbol }),
@@ -80,4 +83,5 @@ export const useAppStore = create<AppState>((set) => ({
   toggleOverlay: (k) => set((s) => ({ overlays: { ...s.overlays, [k]: !s.overlays[k] } })),
   setScenarioView: (scenarioView) => set({ scenarioView }),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
+  setNotify: (notifyEnabled) => set({ notifyEnabled }),
 }))
