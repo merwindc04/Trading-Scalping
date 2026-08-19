@@ -212,18 +212,30 @@ export function TradingChart({
         })
       }
     }
-    // Signal marker on the latest bar — the decisive BUY / SELL indication.
+    // Signal marker on the latest bar — always present so every timeframe
+    // (incl. 1W / 1M) shows the current call: BUY, SELL or a neutral HOLD.
     const sg = analysis.signal
-    if (overlays.signals && sg.action !== 'WAIT') {
+    if (overlays.signals) {
       const anchorTime = analysis.candles[analysis.candles.length - 1].time
-      markers.push({
-        time: asTime(anchorTime),
-        position: sg.action === 'BUY' ? 'belowBar' : 'aboveBar',
-        color: sg.action === 'BUY' ? '#4fd39a' : '#f0736c',
-        shape: sg.action === 'BUY' ? 'arrowUp' : 'arrowDown',
-        text: `${sg.action} ${sg.grade}`,
-        size: 2,
-      })
+      if (sg.action === 'BUY' || sg.action === 'SELL') {
+        markers.push({
+          time: asTime(anchorTime),
+          position: sg.action === 'BUY' ? 'belowBar' : 'aboveBar',
+          color: sg.action === 'BUY' ? '#4fd39a' : '#f0736c',
+          shape: sg.action === 'BUY' ? 'arrowUp' : 'arrowDown',
+          text: `${sg.action} ${sg.grade}`,
+          size: 2,
+        })
+      } else {
+        markers.push({
+          time: asTime(anchorTime),
+          position: 'aboveBar',
+          color: '#e0b866',
+          shape: 'circle',
+          text: 'HOLD',
+          size: 1,
+        })
+      }
     }
     markers.sort((a, b) => (a.time as number) - (b.time as number))
     r.candles.setMarkers(markers)
