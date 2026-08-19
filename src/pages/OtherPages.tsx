@@ -428,6 +428,24 @@ export function SettingsPage() {
           ))}
         </div>
       </Panel>
+      <Panel title="Preferences" className="mt-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] text-ink-400">Your asset, timeframe, overlays, watchlist and alert rules are saved on this device and restored automatically.</div>
+          <button
+            onClick={() => {
+              try {
+                localStorage.removeItem('aurumpulse')
+              } catch {
+                /* ignore */
+              }
+              location.reload()
+            }}
+            className="btn shrink-0"
+          >
+            Reset to defaults
+          </button>
+        </div>
+      </Panel>
     </div>
   )
 }

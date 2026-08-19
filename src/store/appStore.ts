@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Timeframe, TradingStyle } from '@/types/market'
 import { PRIMARY_ASSET, WATCHLIST_DEFAULT } from '@/lib/assets'
 import type { ScenarioKey } from '@/lib/engines/forecast'
@@ -63,6 +64,8 @@ interface AppState {
   toggleChat: () => void
   setNotify: (v: boolean) => void
   setAlertRules: (patch: Partial<AlertRules>) => void
+  addToWatchlist: (s: string) => void
+  removeFromWatchlist: (s: string) => void
 }
 
 const STYLE_DEFAULT_TF: Record<TradingStyle, Timeframe> = {
@@ -72,35 +75,72 @@ const STYLE_DEFAULT_TF: Record<TradingStyle, Timeframe> = {
   INVEST: '1D',
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  nav: 'Dashboard',
-  symbol: PRIMARY_ASSET,
-  timeframe: '15m',
-  style: 'SCALP',
-  watchlist: WATCHLIST_DEFAULT,
-  overlays: {
-    structure: true,
-    levels: true,
-    emas: true,
-    vwap: false,
-    bbands: false,
-    projected: true,
-    ghost: true,
-    pattern: true,
-    signals: true,
-  },
-  scenarioView: 'all',
-  chatOpen: false,
-  notifyEnabled: false,
-  alertRules: { minGrade: 'B', direction: 'both', entryZone: false },
+const DEFAULT_OVERLAYS: OverlayToggles = {
+  structure: true,
+  levels: true,
+  emas: true,
+  vwap: false,
+  bbands: false,
+  projected: true,
+  ghost: true,
+  pattern: true,
+  signals: true,
+}
 
-  setNav: (nav) => set({ nav }),
-  setSymbol: (symbol) => set({ symbol }),
-  setTimeframe: (timeframe) => set({ timeframe }),
-  setStyle: (style) => set({ style, timeframe: STYLE_DEFAULT_TF[style] }),
-  toggleOverlay: (k) => set((s) => ({ overlays: { ...s.overlays, [k]: !s.overlays[k] } })),
-  setScenarioView: (scenarioView) => set({ scenarioView }),
-  toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
-  setNotify: (notifyEnabled) => set({ notifyEnabled }),
-  setAlertRules: (patch) => set((s) => ({ alertRules: { ...s.alertRules, ...patch } })),
-}))
+const DEFAULT_ALERT_RULES: AlertRules = { minGrade: 'B', direction: 'both', entryZone: false }
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      nav: 'Dashboard',
+      symbol: PRIMARY_ASSET,
+      timeframe: '15m',
+      style: 'SCALP',
+      watchlist: WATCHLIST_DEFAULT,
+      overlays: DEFAULT_OVERLAYS,
+      scenarioView: 'all',
+      chatOpen: false,
+      notifyEnabled: false,
+      alertRules: DEFAULT_ALERT_RULES,
+
+      setNav: (nav) => set({ nav }),
+      setSymbol: (symbol) => set({ symbol }),
+      setTimeframe: (timeframe) => set({ timeframe }),
+      setStyle: (style) => set({ style, timeframe: STYLE_DEFAULT_TF[style] }),
+      toggleOverlay: (k) => set((s) => ({ overlays: { ...s.overlays, [k]: !s.overlays[k] } })),
+      setScenarioView: (scenarioView) => set({ scenarioView }),
+      toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
+      setNotify: (notifyEnabled) => set({ notifyEnabled }),
+      setAlertRules: (patch) => set((s) => ({ alertRules: { ...s.alertRules, ...patch } })),
+      addToWatchlist: (sym) => set((s) => (s.watchlist.includes(sym) ? s : { watchlist: [...s.watchlist, sym] })),
+      removeFromWatchlist: (sym) => set((s) => ({ watchlist: s.watchlist.filter((x) => x !== sym) })),
+    }),
+    {
+      name: 'aurumpulse',
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      // Persist user preferences only — never transient UI like the chat drawer.
+      partialize: (s) => ({
+        nav: s.nav,
+        symbol: s.symbol,
+        timeframe: s.timeframe,
+        style: s.style,
+        watchlist: s.watchlist,
+        overlays: s.overlays,
+        scenarioView: s.scenarioView,
+        notifyEnabled: s.notifyEnabled,
+        alertRules: s.alertRules,
+      }),
+      // Deep-merge so newly-added overlay/rule keys keep their defaults.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<AppState>
+        return {
+          ...current,
+          ...p,
+          overlays: { ...DEFAULT_OVERLAYS, ...(p.overlays ?? {}) },
+          alertRules: { ...DEFAULT_ALERT_RULES, ...(p.alertRules ?? {}) },
+        }
+      },
+    },
+  ),
+)
