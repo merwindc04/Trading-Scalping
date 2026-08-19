@@ -11,6 +11,7 @@ import { Panel } from '@/components/ui/primitives'
 import { marketData } from '@/lib/providers/LiveMarketDataProvider'
 import { ASSETS, SCANNER_ASSETS } from '@/lib/assets'
 import { useAppStore, GRADE_RANK, type AlertGrade, type AlertDirection } from '@/store/appStore'
+import { useSignalsStore } from '@/store/signalsStore'
 import { fmt, fmtSigned } from '@/lib/format'
 import { Sparkline } from '@/components/ui/primitives'
 
@@ -202,10 +203,62 @@ export function AlertsPage({ live }: { live: LiveState }) {
           <div className="text-[12px] text-ink-500">Loading current signal…</div>
         )}
         <p className="mt-3 text-[10px] leading-relaxed text-ink-500">
-          Alerts track the asset & timeframe you’re viewing. Analytical suggestions with a defined stop — probabilistic, not guarantees or personalised advice.
+          The preview tracks the asset & timeframe you’re viewing; the scanner below watches your whole watchlist. Analytical suggestions with a defined stop — probabilistic, not guarantees or personalised advice.
         </p>
       </Panel>
+
+      <OpportunitiesPanel />
     </div>
+  )
+}
+
+function OpportunitiesPanel() {
+  const signals = useSignalsStore((s) => s.watchlistSignals)
+  const { alertRules, setSymbol, setNav } = useAppStore()
+  const rows = Object.values(signals)
+    .filter((s) => s.action !== 'WAIT')
+    .filter((s) => alertRules.direction === 'both' || (alertRules.direction === 'buy' && s.action === 'BUY') || (alertRules.direction === 'sell' && s.action === 'SELL'))
+    .filter((s) => GRADE_RANK[s.grade] >= GRADE_RANK[alertRules.minGrade])
+    .sort((a, b) => b.score - a.score)
+
+  return (
+    <Panel title="Watchlist Opportunities" className="mt-2" right={<span className="nums text-[10px] text-ink-500">{rows.length} matching your rules</span>}>
+      {rows.length === 0 ? (
+        <div className="rounded-lg bg-base-800 px-3 py-4 text-center text-[11px] text-ink-500">
+          No watchlist markets match your rules right now. The scanner keeps checking every 30 seconds — you’ll be notified the moment one does.
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {rows.map((s) => {
+            const buy = s.action === 'BUY'
+            const color = buy ? 'var(--color-bull-400)' : 'var(--color-bear-400)'
+            return (
+              <button
+                key={s.symbol}
+                onClick={() => {
+                  setSymbol(s.symbol)
+                  setNav('Dashboard')
+                }}
+                className="flex w-full items-center gap-3 rounded-lg bg-base-800 px-3 py-2 text-left hover:bg-white/[0.04]"
+              >
+                <span className="rounded-md px-1.5 py-0.5 text-[10px] font-bold" style={{ color, background: `color-mix(in oklab, ${color} 16%, transparent)` }}>
+                  {s.headline}
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[12px] font-semibold text-ink-100">
+                    {s.symbol} <span className="text-[10px] font-normal text-ink-500">· {s.timeframe}</span>
+                  </div>
+                  <div className="text-[10px] text-ink-500">
+                    {s.symbolName} · Grade {s.grade} · {s.score}/100 · {s.confidence}% conf.
+                  </div>
+                </div>
+                <span className="nums ml-auto text-[11px] text-ink-300">{fmt(s.price, s.precision)}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </Panel>
   )
 }
 

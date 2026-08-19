@@ -2,6 +2,8 @@ import { TopNav } from '@/components/layout/TopNav'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { AIChat } from '@/components/AIChat'
 import { SignalNotifier } from '@/components/SignalNotifier'
+import { Toaster } from '@/components/Toaster'
+import { useWatchlistScanner } from '@/hooks/useWatchlistScanner'
 import { Dashboard } from '@/pages/Dashboard'
 import { Scanner } from '@/pages/Scanner'
 import { ForecastPage, HistoricalPage, MarketsPage, AlertsPage, BacktestingPage, JournalPage, WatchlistPage, SettingsPage } from '@/pages/OtherPages'
@@ -11,6 +13,7 @@ import { useAnalysis } from '@/hooks/useAnalysis'
 export default function App() {
   const { nav, symbol, timeframe, style } = useAppStore()
   const live = useAnalysis(symbol, timeframe, style)
+  useWatchlistScanner()
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -33,6 +36,7 @@ export default function App() {
 
       <AIChat analysis={live.analysis} />
       <SignalNotifier analysis={live.analysis} />
+      <Toaster />
       <MobileNav />
       <Disclaimer />
     </div>

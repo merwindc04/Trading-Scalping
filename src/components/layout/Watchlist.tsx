@@ -4,6 +4,7 @@ import type { Direction } from '@/types/market'
 import { ASSETS } from '@/lib/assets'
 import { marketData } from '@/lib/providers/LiveMarketDataProvider'
 import { useAppStore } from '@/store/appStore'
+import { useSignalsStore } from '@/store/signalsStore'
 import { fmt, fmtSigned } from '@/lib/format'
 import { Sparkline } from '@/components/ui/primitives'
 
@@ -14,6 +15,22 @@ interface Row {
   changePct: number
   spark: number[]
   dir: Direction
+}
+
+function SignalBadge({ symbol }: { symbol: string }) {
+  const sig = useSignalsStore((s) => s.watchlistSignals[symbol])
+  if (!sig || sig.action === 'WAIT') return null
+  const buy = sig.action === 'BUY'
+  const color = buy ? 'var(--color-bull-400)' : 'var(--color-bear-400)'
+  return (
+    <span
+      className="rounded px-1 py-px text-[8px] font-bold uppercase tracking-wide"
+      style={{ color, background: `color-mix(in oklab, ${color} 16%, transparent)` }}
+      title={`${sig.headline} · Grade ${sig.grade} on ${sig.timeframe}`}
+    >
+      {buy ? 'BUY' : 'SELL'}
+    </span>
+  )
 }
 
 export function Watchlist() {
@@ -69,6 +86,7 @@ export function Watchlist() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-[12px] font-semibold ${active ? 'text-gold-100' : 'text-ink-100'}`}>{r.symbol}</span>
+                  <SignalBadge symbol={r.symbol} />
                 </div>
                 <div className="nums text-[10px] text-ink-500">{fmt(r.price, ASSETS[r.symbol].precision)}</div>
               </div>
