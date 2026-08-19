@@ -40,7 +40,7 @@ export function ChartCard({ analysis, liveCandle, price }: { analysis: Analysis 
             <div className="flex items-center gap-2">
               <span className="text-[15px] font-semibold text-ink-100">{symbol}</span>
               <span className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-ink-400">{TIMEFRAME_LABEL[timeframe]}</span>
-              {analysis && <DirectionPill direction={analysis.strength.direction} size="sm" />}
+              {analysis && <DirectionPill direction={analysis.bias} size="sm" />}
             </div>
           </div>
           <div className="flex items-baseline gap-1.5">

@@ -67,6 +67,7 @@ export function TradingChart({
   const containerRef = useRef<HTMLDivElement>(null)
   const refs = useRef<Refs | null>(null)
   const lastView = useRef<string>('')
+  const lastBarTime = useRef<number>(0)
 
   // --- create chart once ---
   useEffect(() => {
@@ -308,6 +309,9 @@ export function TradingChart({
       r.envLower.setData([])
     }
 
+    // Track the last real bar's time so live ticks can't feed out-of-order data.
+    lastBarTime.current = analysis.candles[analysis.candles.length - 1].time
+
     // Preserve zoom across refreshes; only fit when the market/timeframe changes.
     const viewKey = `${analysis.symbol}|${analysis.timeframe}`
     if (lastView.current !== viewKey) {
@@ -321,9 +325,17 @@ export function TradingChart({
   useEffect(() => {
     const r = refs.current
     if (!r || !liveCandle) return
+    // Guard against stale ticks from a prior timeframe's stream arriving after a
+    // switch — lightweight-charts throws if update() goes back in time.
+    if (liveCandle.time < lastBarTime.current) return
     const t = liveCandle.time as Time
-    r.candles.update({ time: t, open: liveCandle.open, high: liveCandle.high, low: liveCandle.low, close: liveCandle.close })
-    r.volume.update({ time: t, value: liveCandle.volume, color: liveCandle.close >= liveCandle.open ? 'rgba(53,180,127,0.28)' : 'rgba(224,85,78,0.28)' })
+    try {
+      r.candles.update({ time: t, open: liveCandle.open, high: liveCandle.high, low: liveCandle.low, close: liveCandle.close })
+      r.volume.update({ time: t, value: liveCandle.volume, color: liveCandle.close >= liveCandle.open ? 'rgba(53,180,127,0.28)' : 'rgba(224,85,78,0.28)' })
+      lastBarTime.current = liveCandle.time
+    } catch {
+      /* out-of-order tick during a source switch — ignore */
+    }
   }, [liveCandle])
 
   return <div ref={containerRef} className="h-full w-full" />

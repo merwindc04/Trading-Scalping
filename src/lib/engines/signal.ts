@@ -67,16 +67,18 @@ export interface SignalInput {
 }
 
 export function evaluateSignal(i: SignalInput): SignalReport {
-  const bull = i.strengthOverall // 0..100, bull-positive
+  const bull = i.strengthOverall // 0..100, bull-positive (the ensemble read)
   const rsiOverbought = i.rsi >= 72
   const rsiOversold = i.rsi <= 28
 
+  // Action follows the single directional read; RSI only guards against chasing
+  // an already-extended move (demotes to WAIT rather than flipping the call).
   let action: SignalAction = 'WAIT'
   let strong = false
-  if (i.direction === 'BULLISH' && bull >= 60 && !rsiOverbought) {
+  if (i.direction === 'BULLISH' && !rsiOverbought) {
     action = 'BUY'
     strong = bull >= 73 && i.confidence >= 52
-  } else if (i.direction === 'BEARISH' && bull <= 40 && !rsiOversold) {
+  } else if (i.direction === 'BEARISH' && !rsiOversold) {
     action = 'SELL'
     strong = bull <= 27 && i.confidence >= 52
   }

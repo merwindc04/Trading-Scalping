@@ -78,13 +78,31 @@ export function trueRange(candles: Candle[]): number[] {
   })
 }
 
+/** Wilder's smoothed moving average (RMA) — the standard basis for ATR/ADX/RSI. */
+export function rma(values: number[], period: number): number[] {
+  const out: number[] = new Array(values.length).fill(NaN)
+  let sum = 0
+  let prev = NaN
+  for (let i = 0; i < values.length; i++) {
+    if (i < period) {
+      sum += values[i]
+      if (i === period - 1) {
+        prev = sum / period
+        out[i] = prev
+      }
+    } else {
+      prev = (prev * (period - 1) + values[i]) / period
+      out[i] = prev
+    }
+  }
+  return out
+}
+
 export function atr(candles: Candle[], period = 14): number[] {
-  const tr = trueRange(candles)
-  return ema(tr, period)
+  return rma(trueRange(candles), period)
 }
 
 export function adx(candles: Candle[], period = 14): number[] {
-  const out: number[] = new Array(candles.length).fill(NaN)
   const plusDM: number[] = [0]
   const minusDM: number[] = [0]
   for (let i = 1; i < candles.length; i++) {
@@ -93,14 +111,11 @@ export function adx(candles: Candle[], period = 14): number[] {
     plusDM.push(up > dn && up > 0 ? up : 0)
     minusDM.push(dn > up && dn > 0 ? dn : 0)
   }
-  const tr = trueRange(candles)
-  const atrS = ema(tr, period)
-  const pdi = ema(plusDM, period).map((v, i) => (100 * v) / (atrS[i] || 1e-9))
-  const mdi = ema(minusDM, period).map((v, i) => (100 * v) / (atrS[i] || 1e-9))
-  const dx = pdi.map((p, i) => (100 * Math.abs(p - mdi[i])) / ((p + mdi[i]) || 1e-9))
-  const adxS = ema(dx, period)
-  for (let i = 0; i < candles.length; i++) out[i] = adxS[i]
-  return out
+  const trS = rma(trueRange(candles), period)
+  const pdi = rma(plusDM, period).map((v, i) => (100 * v) / (trS[i] || 1e-9))
+  const mdi = rma(minusDM, period).map((v, i) => (100 * v) / (trS[i] || 1e-9))
+  const dx = pdi.map((p, i) => (100 * Math.abs(p - mdi[i])) / (p + mdi[i] || 1e-9))
+  return rma(dx, period)
 }
 
 export interface BollingerResult {

@@ -57,6 +57,8 @@ export interface Analysis {
   candles: Candle[]
   price: number
   changePct: number
+  /** The single unified directional read driving signal, setup & projection. */
+  bias: Direction
   technical: TechnicalReport
   structure: MarketStructureReport
   patterns: DetectedPattern[]
@@ -176,12 +178,12 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     historicalSimilarity: historicalComponent,
   })
 
-  // Ensemble bull score → probabilities.
-  const bullScore = clamp(
-    strength.overall * 0.5 + technical.trendScore * 0.16 + structure.structureScore * 0.16 + mtf.avgBull * 0.18,
-    3,
-    97,
-  )
+  // The Market Strength score IS the single ensemble read (a 9-component
+  // weighted blend). Everything actionable — probabilities, the projected
+  // primary scenario, the trade setup and the signal — keys off this same
+  // number and its direction, so nothing on screen can contradict.
+  const bullScore = strength.overall
+  const bias: Direction = strength.direction
 
   const reliability = pattern.reliability === 'High' ? 0.85 : pattern.reliability === 'Medium' ? 0.6 : 0.4
 
@@ -198,9 +200,15 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     volatilityPct: snap.atrPct,
   })
 
+  // Align the projected primary scenario with the directional read so the chart
+  // ghost candles, targets and the trade setup all tell the same story.
+  const activeKey = bias === 'BULLISH' ? 'bull' : bias === 'BEARISH' ? 'bear' : 'base'
+  const activeScenario = forecast.scenarios.find((s) => s.key === activeKey) ?? forecast.primary
+  forecast.primary = activeScenario
+
   const explanation = buildExplanation({
     symbolName: asset.name,
-    direction: strength.direction,
+    direction: bias,
     technical,
     structure,
     pattern,
@@ -210,25 +218,24 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     precision: asset.precision,
   })
 
-  const primary = forecast.primary
-  const dir = primary.direction === 'NEUTRAL' ? strength.direction : primary.direction
+  // Entry zone anchored to price; stop & targets come from the active scenario.
   const spread = snap.atr * 0.5
   const setup: TradeSetup = {
-    bias: dir,
+    bias,
     entryLow: last.close - spread,
     entryHigh: last.close + spread * 0.4,
-    targets: primary.targets,
-    invalidation: primary.invalidation,
-    riskReward: primary.riskReward,
+    targets: activeScenario.targets,
+    invalidation: activeScenario.invalidation,
+    riskReward: activeScenario.riskReward,
     confidence: forecast.confidence,
-    horizon: primary.durationLabel,
+    horizon: activeScenario.durationLabel,
   }
 
   const signal = evaluateSignal({
     symbol,
     price: last.close,
-    strengthOverall: strength.overall,
-    direction: strength.direction,
+    strengthOverall: bullScore,
+    direction: bias,
     bull: forecast.bull,
     bear: forecast.bear,
     confidence: forecast.confidence,
@@ -258,6 +265,7 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     candles,
     price: last.close,
     changePct: ((last.close - prev.close) / prev.close) * 100,
+    bias,
     technical,
     structure,
     patterns,
