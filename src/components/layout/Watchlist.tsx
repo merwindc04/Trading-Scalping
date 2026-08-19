@@ -39,25 +39,29 @@ export function Watchlist() {
 
   useEffect(() => {
     let alive = true
-    Promise.all(
-      watchlist.map(async (sym) => {
-        const candles = await marketData.getHistory(sym, '1H', 90)
-        const closes = candles.map((c) => c.close)
-        const last = closes[closes.length - 1]
-        const prev = closes[closes.length - 25] ?? closes[0]
-        const changePct = ((last - prev) / prev) * 100
-        return {
-          symbol: sym,
-          name: ASSETS[sym].name,
-          price: last,
-          changePct,
-          spark: closes.slice(-40),
-          dir: (changePct > 0.15 ? 'BULLISH' : changePct < -0.15 ? 'BEARISH' : 'NEUTRAL') as Direction,
-        }
-      }),
-    ).then((r) => alive && setRows(r))
+    const load = () =>
+      Promise.all(
+        watchlist.map(async (sym) => {
+          const candles = await marketData.getHistory(sym, '1H', 90)
+          const closes = candles.map((c) => c.close)
+          const last = closes[closes.length - 1]
+          const prev = closes[closes.length - 25] ?? closes[0]
+          const changePct = ((last - prev) / prev) * 100
+          return {
+            symbol: sym,
+            name: ASSETS[sym].name,
+            price: last,
+            changePct,
+            spark: closes.slice(-40),
+            dir: (changePct > 0.15 ? 'BULLISH' : changePct < -0.15 ? 'BEARISH' : 'NEUTRAL') as Direction,
+          }
+        }),
+      ).then((r) => alive && setRows(r))
+    load()
+    const id = window.setInterval(load, 20000)
     return () => {
       alive = false
+      window.clearInterval(id)
     }
   }, [watchlist])
 

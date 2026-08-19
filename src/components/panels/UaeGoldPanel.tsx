@@ -13,7 +13,7 @@ import { fmt, fmtSigned } from '@/lib/format'
 
 const USD_AED = 3.6725
 const GRAMS_PER_OZ = 31.1035
-const KARAT_PURITY: Record<string, number> = { '24K': 0.999, '22K': 0.916, '21K': 0.875, '18K': 0.75 }
+const KARAT_PURITY: Record<string, number> = { '24K': 0.9999, '22K': 0.916, '21K': 0.875, '18K': 0.75 }
 
 interface GoldState {
   spot: number
@@ -29,16 +29,21 @@ export function UaeGoldPanel() {
   useEffect(() => {
     let alive = true
     // Daily candles give clean day / week / month reference points.
-    marketData.getHistory('XAUUSD', '1D', 45).then((c) => {
-      if (!alive || c.length < 2) return
-      const closes = c.map((x) => x.close)
-      const last = closes[closes.length - 1]
-      const ago = (n: number) => closes[closes.length - 1 - n] ?? closes[0]
-      const pct = (base: number) => ((last - base) / base) * 100
-      setG({ spot: last, daily: pct(ago(1)), weekly: pct(ago(7)), monthly: pct(ago(30)) })
-    })
+    const load = () =>
+      marketData.getHistory('XAUUSD', '1D', 45).then((c) => {
+        if (!alive || c.length < 2) return
+        const closes = c.map((x) => x.close)
+        const last = closes[closes.length - 1]
+        const ago = (n: number) => closes[closes.length - 1 - n] ?? closes[0]
+        const pct = (base: number) => ((last - base) / base) * 100
+        setG({ spot: last, daily: pct(ago(1)), weekly: pct(ago(7)), monthly: pct(ago(30)) })
+      })
+    load()
+    // Keep the live UAE gold rate current.
+    const id = window.setInterval(load, 20000)
     return () => {
       alive = false
+      window.clearInterval(id)
     }
   }, [])
 

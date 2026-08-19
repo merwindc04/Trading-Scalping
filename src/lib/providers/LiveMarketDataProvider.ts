@@ -29,7 +29,7 @@ const WS = 'wss://data-stream.binance.vision/ws'
 // Abu Dhabi / UAE gold rate = spot (USD/troy-oz) → AED per gram, 24K purity.
 const USD_AED = 3.6725
 const GRAMS_PER_OZ = 31.1035
-const AED_PER_GRAM_24K = (USD_AED / GRAMS_PER_OZ) * 0.999
+const AED_PER_GRAM_24K = (USD_AED / GRAMS_PER_OZ) * 0.9999
 
 /** Each app symbol → its Binance source + optional linear price transform. */
 const SYMBOL_MAP: Record<string, { binance: string; factor?: number }> = {
