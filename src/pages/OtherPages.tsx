@@ -407,7 +407,7 @@ export function SettingsPage() {
               Live Market Data <span className="ml-1 rounded bg-[var(--color-bull-500)]/15 px-1.5 py-0.5 text-[9px] text-[var(--color-bull-400)]">ACTIVE</span>
             </div>
             <div className="text-[10px] text-ink-400">
-              Gold (XAUUSD) and BTC/ETH stream live from Binance public market data — gold via <code className="text-gold-200">PAXG</code>, redeemable 1:1 for a troy ounce of physical gold. Symbols without a live feed (silver, forex, indices) fall back to demo automatically.
+              Gold streams live from Binance <code className="text-gold-200">PAXG</code> candles, calibrated to true XAU spot (gold-api) so the AED/g level tracks the real Abu Dhabi quote. BTC/ETH stream from Binance. Symbols without a live feed (silver, forex, indices) fall back to demo automatically.
             </div>
           </div>
         </div>

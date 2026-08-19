@@ -55,16 +55,47 @@ const INTERVAL_MAP: Record<Timeframe, string> = {
 const CACHE_TTL_MS = 9000
 const FETCH_TIMEOUT_MS = 7000
 
+// True XAU spot (no key, CORS-enabled) — used to calibrate the PAXG candle
+// level to the real spot-gold price the UAE market quotes against.
+const GOLD_API = 'https://api.gold-api.com/price/XAU'
+const SPOT_TTL_MS = 20000
+const PAXG = 'PAXGUSDT'
+
 export class LiveMarketDataProvider implements MarketDataProvider {
-  readonly sourceLabel = 'LIVE · Binance (PAXG gold)'
+  readonly sourceLabel = 'LIVE · spot-calibrated gold'
   readonly isDemo = false
 
   private demo: DemoMarketDataProvider
   private status = new Map<string, 'live' | 'demo'>()
   private cache = new Map<string, { t: number; candles: Candle[] }>()
+  // Cached true XAU spot + a shared in-flight fetch to avoid hammering the API.
+  private xauSpot: { t: number; price: number } | null = null
+  private xauInflight: Promise<number | null> | null = null
+  // Per-symbol multiplier that shifts PAXG onto true XAU spot (applied to ticks too).
+  private spotCal = new Map<string, number>()
 
   constructor(demo: DemoMarketDataProvider) {
     this.demo = demo
+  }
+
+  /** Fetch true XAU spot (USD/oz), cached ~20s, de-duplicated across callers. */
+  private async fetchXauSpot(): Promise<number | null> {
+    if (this.xauSpot && Date.now() - this.xauSpot.t < SPOT_TTL_MS) return this.xauSpot.price
+    if (this.xauInflight) return this.xauInflight
+    this.xauInflight = (async () => {
+      try {
+        const data = (await fetchJSON(GOLD_API)) as { price?: number }
+        const price = Number(data?.price)
+        if (!Number.isFinite(price) || price <= 0) return null
+        this.xauSpot = { t: Date.now(), price }
+        return price
+      } catch {
+        return null
+      } finally {
+        this.xauInflight = null
+      }
+    })()
+    return this.xauInflight
   }
 
   getStatus(symbol: string): 'live' | 'demo' {
@@ -91,15 +122,27 @@ export class LiveMarketDataProvider implements MarketDataProvider {
     try {
       const want = Math.min(Math.max(count, 480), 1000)
       const url = `${REST}?symbol=${mapped.binance}&interval=${INTERVAL_MAP[timeframe]}&limit=${want}`
-      const raw = await fetchJSON(url)
+      const raw = (await fetchJSON(url)) as unknown[][]
       const p = this.precisionFor(symbol)
       const f = mapped.factor ?? 1
-      const candles: Candle[] = (raw as unknown[][]).map((k) => ({
+
+      // For gold, calibrate PAXG onto true XAU spot so the level matches the
+      // real Abu Dhabi / spot-gold quote. cal = trueSpot / PAXG-last-close.
+      let cal = 1
+      if (mapped.binance === PAXG) {
+        const paxgLast = Number(raw[raw.length - 1]?.[4])
+        const xau = await this.fetchXauSpot()
+        if (xau && paxgLast > 0) cal = xau / paxgLast
+        this.spotCal.set(symbol, cal)
+      }
+
+      const m = f * cal
+      const candles: Candle[] = raw.map((k) => ({
         time: Math.floor(Number(k[0]) / 1000),
-        open: round(Number(k[1]) * f, p),
-        high: round(Number(k[2]) * f, p),
-        low: round(Number(k[3]) * f, p),
-        close: round(Number(k[4]) * f, p),
+        open: round(Number(k[1]) * m, p),
+        high: round(Number(k[2]) * m, p),
+        low: round(Number(k[3]) * m, p),
+        close: round(Number(k[4]) * m, p),
         volume: Number(k[5]),
       }))
       if (candles.length < 20) throw new Error('insufficient live candles')
@@ -148,12 +191,14 @@ export class LiveMarketDataProvider implements MarketDataProvider {
           const k = msg.k
           if (!k) return
           const time = Math.floor(Number(k.t) / 1000)
+          // Apply the latest spot calibration so live ticks stay on true XAU spot.
+          const m = f * (this.spotCal.get(symbol) ?? 1)
           const candle: Candle = {
             time,
-            open: round(Number(k.o) * f, p),
-            high: round(Number(k.h) * f, p),
-            low: round(Number(k.l) * f, p),
-            close: round(Number(k.c) * f, p),
+            open: round(Number(k.o) * m, p),
+            high: round(Number(k.h) * m, p),
+            low: round(Number(k.l) * m, p),
+            close: round(Number(k.c) * m, p),
             volume: Number(k.v),
           }
           const isNewBar = lastBarTime !== 0 && time > lastBarTime
