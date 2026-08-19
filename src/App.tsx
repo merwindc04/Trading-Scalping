@@ -25,7 +25,7 @@ export default function App() {
           {nav === 'Markets' && <MarketsPage />}
           {nav === 'Backtesting' && <BacktestingPage />}
           {nav === 'Watchlist' && <WatchlistPage />}
-          {nav === 'Alerts' && <AlertsPage />}
+          {nav === 'Alerts' && <AlertsPage live={live} />}
           {nav === 'Journal' && <JournalPage />}
           {nav === 'Settings' && <SettingsPage />}
         </div>

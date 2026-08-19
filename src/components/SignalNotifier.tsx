@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { TrendingUp, TrendingDown, X, BellRing } from 'lucide-react'
 import type { Analysis } from '@/lib/analyze'
 import type { SignalAction } from '@/lib/engines/signal'
-import { useAppStore } from '@/store/appStore'
+import { useAppStore, GRADE_RANK } from '@/store/appStore'
+import type { SignalReport } from '@/lib/engines/signal'
 import { fmt } from '@/lib/format'
 
 /* ============================================================
@@ -24,47 +25,77 @@ interface Toast {
 let toastSeq = 1
 
 export function SignalNotifier({ analysis }: { analysis: Analysis | null }) {
-  const { notifyEnabled } = useAppStore()
+  const { notifyEnabled, alertRules } = useAppStore()
   const [toasts, setToasts] = useState<Toast[]>([])
   const lastKey = useRef<string>('')
+  const zoneState = useRef<{ symbol: string; inZone: boolean }>({ symbol: '', inZone: false })
 
   const sig = analysis?.signal
   const triggerKey = sig?.triggerKey ?? ''
 
-  useEffect(() => {
-    if (!analysis || !sig) return
-    if (!notifyEnabled) {
-      // Keep the baseline in sync so enabling later doesn't replay an old state.
-      lastKey.current = triggerKey
-      return
-    }
-    if (sig.action === 'WAIT') {
-      lastKey.current = triggerKey
-      return
-    }
-    if (triggerKey === lastKey.current) return
-    lastKey.current = triggerKey
+  function passesRules(s: SignalReport): boolean {
+    if (alertRules.direction === 'buy' && s.action !== 'BUY') return false
+    if (alertRules.direction === 'sell' && s.action !== 'SELL') return false
+    return GRADE_RANK[s.grade] >= GRADE_RANK[alertRules.minGrade]
+  }
 
-    const verb = sig.action === 'BUY' ? 'buy' : 'sell'
-    const title = `${sig.headline} · ${analysis.symbol}`
-    const entry = fmt(Math.min(sig.entryLow, sig.entryHigh), analysis.precision)
-    const target = fmt(sig.targets[Math.min(1, sig.targets.length - 1)], analysis.precision)
-    const body = `${analysis.symbolName}: it may be time to ${verb}. Entry ~${entry}, target ${target}, ${sig.confidence}% confidence.`
-
-    // In-app toast
+  function pushAlert(action: 'BUY' | 'SELL', title: string, body: string, tag: string) {
     const id = toastSeq++
-    setToasts((t) => [{ id, action: sig.action, title, body }, ...t].slice(0, 3))
+    setToasts((t) => [{ id, action, title, body }, ...t].slice(0, 3))
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 14000)
-
-    // Native notification (best-effort)
     try {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body, tag: `aurumpulse-${analysis.symbol}` })
-      }
+      if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, tag })
     } catch {
       /* ignore */
     }
-  }, [triggerKey, notifyEnabled, analysis, sig])
+  }
+
+  useEffect(() => {
+    if (!analysis || !sig) return
+    const consume = () => (lastKey.current = triggerKey)
+
+    if (!notifyEnabled || sig.action === 'WAIT') {
+      consume()
+      zoneState.current = { symbol: analysis.symbol, inZone: false }
+      return
+    }
+
+    // ---- Entry-zone trigger (optional) ----
+    if (alertRules.entryZone && passesRules(sig)) {
+      const lo = Math.min(sig.entryLow, sig.entryHigh)
+      const hi = Math.max(sig.entryLow, sig.entryHigh)
+      const inZone = analysis.price >= lo && analysis.price <= hi
+      const prev = zoneState.current
+      const wasInZone = prev.symbol === analysis.symbol && prev.inZone
+      if (inZone && !wasInZone) {
+        const verb = sig.action === 'BUY' ? 'buy' : 'sell'
+        pushAlert(
+          sig.action,
+          `Entry zone · ${analysis.symbol}`,
+          `${analysis.symbolName}: price entered the ${verb} zone (${fmt(lo, analysis.precision)}–${fmt(hi, analysis.precision)}). ${sig.headline} setup active.`,
+          `aurumpulse-zone-${analysis.symbol}`,
+        )
+      }
+      zoneState.current = { symbol: analysis.symbol, inZone }
+    } else {
+      zoneState.current = { symbol: analysis.symbol, inZone: false }
+    }
+
+    // ---- Signal-flip trigger ----
+    if (triggerKey === lastKey.current) return
+    consume()
+    if (!passesRules(sig)) return
+
+    const verb = sig.action === 'BUY' ? 'buy' : 'sell'
+    const entry = fmt(Math.min(sig.entryLow, sig.entryHigh), analysis.precision)
+    const target = fmt(sig.targets[Math.min(1, sig.targets.length - 1)], analysis.precision)
+    pushAlert(
+      sig.action,
+      `${sig.headline} · ${analysis.symbol}`,
+      `${analysis.symbolName}: it may be time to ${verb}. Entry ~${entry}, target ${target}, ${sig.confidence}% confidence.`,
+      `aurumpulse-${analysis.symbol}`,
+    )
+  }, [triggerKey, notifyEnabled, alertRules, analysis, sig])
 
   if (toasts.length === 0) return null
 

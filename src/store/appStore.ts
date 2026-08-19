@@ -28,6 +28,19 @@ export interface OverlayToggles {
 
 export type ScenarioView = ScenarioKey | 'all'
 
+export type AlertGrade = 'C' | 'B' | 'A' | 'A+'
+export type AlertDirection = 'both' | 'buy' | 'sell'
+export interface AlertRules {
+  /** Only alert on signals at or above this grade. */
+  minGrade: AlertGrade
+  /** Which actions to alert on. */
+  direction: AlertDirection
+  /** Also alert when price enters an active signal's entry zone. */
+  entryZone: boolean
+}
+
+export const GRADE_RANK: Record<AlertGrade, number> = { C: 0, B: 1, A: 2, 'A+': 3 }
+
 interface AppState {
   nav: NavKey
   symbol: string
@@ -38,6 +51,7 @@ interface AppState {
   scenarioView: ScenarioView
   chatOpen: boolean
   notifyEnabled: boolean
+  alertRules: AlertRules
 
   setNav: (n: NavKey) => void
   setSymbol: (s: string) => void
@@ -47,6 +61,7 @@ interface AppState {
   setScenarioView: (v: ScenarioView) => void
   toggleChat: () => void
   setNotify: (v: boolean) => void
+  setAlertRules: (patch: Partial<AlertRules>) => void
 }
 
 const STYLE_DEFAULT_TF: Record<TradingStyle, Timeframe> = {
@@ -75,6 +90,7 @@ export const useAppStore = create<AppState>((set) => ({
   scenarioView: 'all',
   chatOpen: false,
   notifyEnabled: false,
+  alertRules: { minGrade: 'B', direction: 'both', entryZone: false },
 
   setNav: (nav) => set({ nav }),
   setSymbol: (symbol) => set({ symbol }),
@@ -84,4 +100,5 @@ export const useAppStore = create<AppState>((set) => ({
   setScenarioView: (scenarioView) => set({ scenarioView }),
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
   setNotify: (notifyEnabled) => set({ notifyEnabled }),
+  setAlertRules: (patch) => set((s) => ({ alertRules: { ...s.alertRules, ...patch } })),
 }))

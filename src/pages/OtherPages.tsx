@@ -10,7 +10,7 @@ import { MarketStrengthPanel } from '@/components/panels/MarketStrengthPanel'
 import { Panel } from '@/components/ui/primitives'
 import { marketData } from '@/lib/providers/LiveMarketDataProvider'
 import { ASSETS, SCANNER_ASSETS } from '@/lib/assets'
-import { useAppStore } from '@/store/appStore'
+import { useAppStore, GRADE_RANK, type AlertGrade, type AlertDirection } from '@/store/appStore'
 import { fmt, fmtSigned } from '@/lib/format'
 import { Sparkline } from '@/components/ui/primitives'
 
@@ -109,43 +109,143 @@ export function MarketsPage() {
   )
 }
 
-/* ---------- Alerts (interactive-ish) ---------- */
-const ALERT_TEMPLATES = [
-  'Gold Strength > 80',
-  'Bull Flag detected',
-  'Resistance breaks',
-  'Bullish probability > 75%',
-  'Multi-timeframe alignment > 80%',
-  'Price enters potential entry zone',
-  'Forecast flips bullish → bearish',
-  'Historical similarity > 90%',
+/* ---------- Alerts (custom trigger rules + live preview) ---------- */
+const GRADES: AlertGrade[] = ['C', 'B', 'A', 'A+']
+const DIRECTIONS: { key: AlertDirection; label: string }[] = [
+  { key: 'both', label: 'Buy & Sell' },
+  { key: 'buy', label: 'Buy only' },
+  { key: 'sell', label: 'Sell only' },
 ]
-export function AlertsPage() {
-  const [active, setActive] = useState<string[]>(['Gold Strength > 80', 'Bull Flag detected'])
+
+export function AlertsPage({ live }: { live: LiveState }) {
+  const { notifyEnabled, setNotify, alertRules, setAlertRules } = useAppStore()
+
+  async function enable() {
+    if (notifyEnabled) return setNotify(false)
+    setNotify(true)
+    try {
+      if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const sig = live.analysis?.signal
+  const wouldFire =
+    !!sig &&
+    sig.action !== 'WAIT' &&
+    (alertRules.direction === 'both' || (alertRules.direction === 'buy' && sig.action === 'BUY') || (alertRules.direction === 'sell' && sig.action === 'SELL')) &&
+    GRADE_RANK[sig.grade] >= GRADE_RANK[alertRules.minGrade]
+
   return (
     <div className="mx-auto h-full max-w-3xl overflow-y-auto scrollbar-thin p-4">
-      <PageHead icon={Bell} title="Alerts" sub="Get notified the moment the market matches your conditions." phase="Phase 8" />
-      <Panel title="Alert Conditions" className="mt-3">
-        <div className="space-y-1.5">
-          {ALERT_TEMPLATES.map((t) => {
-            const on = active.includes(t)
-            return (
-              <button
-                key={t}
-                onClick={() => setActive((a) => (on ? a.filter((x) => x !== t) : [...a, t]))}
-                className={`flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left text-[12px] transition-colors ${
-                  on ? 'border-gold-500/30 bg-gold-500/[0.06] text-gold-100' : 'border-white/[0.06] bg-base-800 text-ink-300 hover:border-white/15'
-                }`}
-              >
-                <span>Notify me when: <span className="font-medium">{t}</span></span>
-                <span className={`grid h-5 w-5 place-items-center rounded-md ${on ? 'bg-gold-400 text-base-950' : 'border border-white/10'}`}>{on ? <Check size={12} /> : <Plus size={12} className="text-ink-500" />}</span>
-              </button>
-            )
-          })}
+      <PageHead icon={Bell} title="Alerts" sub="Set exactly when AurumPulse pings you that it’s time to act." phase="Live" />
+
+      {/* Master switch */}
+      <Panel className="mt-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[13px] font-semibold text-ink-100">Buy / sell signal alerts</div>
+            <div className="text-[11px] text-ink-400">In-app toast + browser notification when your rules are met.</div>
+          </div>
+          <Switch on={notifyEnabled} onClick={enable} />
         </div>
-        <p className="mt-3 text-[10px] text-ink-500">{active.length} active alert{active.length === 1 ? '' : 's'}. Delivery channels (push / email / webhook) arrive with accounts in Phase 8.</p>
+      </Panel>
+
+      {/* Rules */}
+      <Panel title="Trigger Rules" className="mt-2">
+        <div className="space-y-3">
+          <Row label="Direction" hint="Which signals should alert you">
+            <Segmented options={DIRECTIONS.map((d) => ({ key: d.key, label: d.label }))} value={alertRules.direction} onChange={(v) => setAlertRules({ direction: v as AlertDirection })} />
+          </Row>
+
+          <Row label="Minimum grade" hint="Only alert on setups this strong or better">
+            <Segmented
+              options={GRADES.map((g) => ({ key: g, label: g }))}
+              value={alertRules.minGrade}
+              onChange={(v) => setAlertRules({ minGrade: v as AlertGrade })}
+            />
+          </Row>
+
+          <Row label="Entry-zone alert" hint="Also ping when price enters an active signal’s entry zone">
+            <Switch on={alertRules.entryZone} onClick={() => setAlertRules({ entryZone: !alertRules.entryZone })} />
+          </Row>
+        </div>
+      </Panel>
+
+      {/* Live preview */}
+      <Panel title="Live Preview" className="mt-2">
+        {sig ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[12px] text-ink-300">
+                Current signal for <span className="font-semibold text-ink-100">{live.analysis!.symbol}</span>:{' '}
+                <span className="font-semibold" style={{ color: sig.action === 'BUY' ? 'var(--color-bull-400)' : sig.action === 'SELL' ? 'var(--color-bear-400)' : 'var(--color-neutral-400)' }}>
+                  {sig.headline}
+                </span>{' '}
+                · Grade {sig.grade} · {sig.score}/100
+              </div>
+              <div className="mt-0.5 text-[10.5px] text-ink-500">{sig.timing}</div>
+            </div>
+            <span
+              className="shrink-0 rounded-lg border px-2.5 py-1.5 text-[10.5px] font-semibold"
+              style={{
+                color: wouldFire ? 'var(--color-bull-400)' : 'var(--color-ink-400)',
+                borderColor: wouldFire ? 'color-mix(in oklab, var(--color-bull-500) 40%, transparent)' : 'rgba(255,255,255,0.1)',
+                background: wouldFire ? 'color-mix(in oklab, var(--color-bull-500) 12%, transparent)' : 'transparent',
+              }}
+            >
+              {notifyEnabled ? (wouldFire ? '✓ Would alert you' : '✗ Below your rules') : 'Alerts off'}
+            </span>
+          </div>
+        ) : (
+          <div className="text-[12px] text-ink-500">Loading current signal…</div>
+        )}
+        <p className="mt-3 text-[10px] leading-relaxed text-ink-500">
+          Alerts track the asset & timeframe you’re viewing. Analytical suggestions with a defined stop — probabilistic, not guarantees or personalised advice.
+        </p>
       </Panel>
     </div>
+  )
+}
+
+function Row({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-base-800 px-3 py-2.5">
+      <div>
+        <div className="text-[12px] font-medium text-ink-200">{label}</div>
+        <div className="text-[10px] text-ink-500">{hint}</div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function Segmented({ options, value, onChange }: { options: { key: string; label: string }[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex rounded-lg border border-white/[0.06] bg-base-900 p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${value === o.key ? 'bg-gradient-to-b from-gold-200 to-gold-400 text-base-950' : 'text-ink-400 hover:text-ink-200'}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? 'bg-gradient-to-r from-gold-300 to-gold-500' : 'bg-base-700'}`}
+      aria-pressed={on}
+    >
+      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${on ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+    </button>
   )
 }
 

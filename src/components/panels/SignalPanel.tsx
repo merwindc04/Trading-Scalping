@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, PauseCircle, Check, X, BellRing, BellOff, Zap } from 'lucide-react'
+import { TrendingUp, TrendingDown, PauseCircle, Check, X, BellRing, BellOff, Zap, SlidersHorizontal } from 'lucide-react'
 import type { Analysis } from '@/lib/analyze'
 import type { SignalAction } from '@/lib/engines/signal'
 import { useAppStore } from '@/store/appStore'
@@ -15,7 +15,7 @@ export function SignalPanel({ analysis }: { analysis: Analysis }) {
   const p = analysis.precision
   const t = THEME[s.action]
   const Icon = t.icon
-  const { notifyEnabled, setNotify } = useAppStore()
+  const { notifyEnabled, setNotify, setNav } = useAppStore()
 
   async function enableNotify() {
     if (notifyEnabled) {
@@ -96,16 +96,21 @@ export function SignalPanel({ analysis }: { analysis: Analysis }) {
         ))}
       </div>
 
-      {/* Notify toggle */}
-      <button
-        onClick={enableNotify}
-        className={`mx-3.5 mb-3.5 flex w-[calc(100%-1.75rem)] items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-semibold transition-colors ${
-          notifyEnabled ? 'border border-gold-500/30 bg-gold-500/[0.08] text-gold-200' : 'btn justify-center'
-        }`}
-      >
-        {notifyEnabled ? <BellRing size={13} /> : <BellOff size={13} />}
-        {notifyEnabled ? 'Buy/sell alerts ON — you’ll be notified' : 'Notify me when it’s time to act'}
-      </button>
+      {/* Notify toggle + rules link */}
+      <div className="mx-3.5 mb-3.5 flex items-center gap-1.5">
+        <button
+          onClick={enableNotify}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-semibold transition-colors ${
+            notifyEnabled ? 'border border-gold-500/30 bg-gold-500/[0.08] text-gold-200' : 'btn justify-center'
+          }`}
+        >
+          {notifyEnabled ? <BellRing size={13} /> : <BellOff size={13} />}
+          {notifyEnabled ? 'Alerts ON' : 'Notify me when it’s time to act'}
+        </button>
+        <button onClick={() => setNav('Alerts')} className="btn shrink-0 !px-2.5 !py-2" title="Customize alert rules">
+          <SlidersHorizontal size={13} />
+        </button>
+      </div>
 
       <p className="mx-3.5 mb-3 -mt-1.5 text-[9px] leading-relaxed text-ink-500">
         Analytical suggestion with a defined stop — a probability-based scenario, not a guarantee or personalised financial advice.
