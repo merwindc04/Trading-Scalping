@@ -24,6 +24,7 @@ export interface OverlayToggles {
   projected: boolean // Projected Pattern paths
   ghost: boolean // Ghost candles + envelope
   pattern: boolean // pattern outline
+  signals: boolean // BUY/SELL marker + entry line
 }
 
 export type ScenarioView = ScenarioKey | 'all'
@@ -86,6 +87,7 @@ export const useAppStore = create<AppState>((set) => ({
     projected: true,
     ghost: true,
     pattern: true,
+    signals: true,
   },
   scenarioView: 'all',
   chatOpen: false,

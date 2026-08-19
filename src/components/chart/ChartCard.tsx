@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Maximize2, Minimize2, Layers, TrendingUp, Ruler, Activity, Sparkles, Ghost, Waves } from 'lucide-react'
+import { Maximize2, Minimize2, Layers, TrendingUp, Ruler, Activity, Sparkles, Ghost, Waves, Target } from 'lucide-react'
 import type { Analysis } from '@/lib/analyze'
 import type { Candle } from '@/types/market'
 import { TradingChart } from './TradingChart'
@@ -21,6 +21,7 @@ const TOGGLES: { key: keyof OverlayToggles; label: string; icon: typeof Layers }
   { key: 'bbands', label: 'Bollinger', icon: Layers },
   { key: 'projected', label: 'Projected', icon: Sparkles },
   { key: 'ghost', label: 'Ghost', icon: Ghost },
+  { key: 'signals', label: 'Signals', icon: Target },
 ]
 
 export function ChartCard({ analysis, liveCandle, price }: { analysis: Analysis | null; liveCandle: Candle | null; price: number | null }) {

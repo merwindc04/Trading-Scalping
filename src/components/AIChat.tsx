@@ -18,6 +18,7 @@ interface Msg {
 }
 
 const SUGGESTIONS = [
+  'Is it a buy right now?',
   'Why is it bullish?',
   'What would invalidate this setup?',
   'Show the strongest support.',
@@ -31,6 +32,17 @@ function respond(q: string, a: Analysis | null): string {
   const p = a.precision
   const ql = q.toLowerCase()
   const bull = a.strength.direction === 'BULLISH'
+  const sg = a.signal
+
+  // Buy / sell / entry — answer straight from the live signal.
+  if (ql.includes('buy') || ql.includes('sell') || ql.includes('should i') || ql.includes('entry') || ql.includes('long') || ql.includes('short') || ql.includes('signal')) {
+    if (sg.action === 'WAIT') {
+      const missing = sg.checks.filter((c) => !c.passed).map((c) => c.label.toLowerCase())
+      return `Right now the signal on ${a.symbolName} (${a.timeframe}) is WAIT — grade ${sg.grade}, ${sg.score}/100 conviction. ${sg.timing} What's missing: ${missing.join(', ') || 'confirmation'}. I'd stand aside until the setup firms up.`
+    }
+    const verb = sg.action === 'BUY' ? 'a long (buy)' : 'a short (sell)'
+    return `The signal is ${sg.headline} on ${a.symbolName} (${a.timeframe}) — grade ${sg.grade}, ${sg.score}/100 conviction. It leans toward ${verb}. Entry ~${fmt(Math.min(sg.entryLow, sg.entryHigh), p)}, stop ${fmt(sg.stop, p)}, first target ${fmt(sg.targets[Math.min(1, sg.targets.length - 1)], p)} (R:R 1:${sg.riskReward}), ${sg.confidence}% confidence over ${sg.horizon}. ${sg.timing} It stays valid while price holds ${fmt(sg.stop, p)}. This is an analytical suggestion with a defined stop — not financial advice.`
+  }
 
   if (ql.includes('invalidat')) {
     return `The ${a.forecast.primary.label.toLowerCase()} scenario stays valid while price holds ${fmt(a.forecast.primary.invalidation, p)}. A decisive close beyond it flips control to the opposite scenario and would drop forecast confidence from its current ${a.forecast.confidence}%.`

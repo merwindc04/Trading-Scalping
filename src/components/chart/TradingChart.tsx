@@ -211,6 +211,19 @@ export function TradingChart({
         })
       }
     }
+    // Signal marker on the latest bar — the decisive BUY / SELL indication.
+    const sg = analysis.signal
+    if (overlays.signals && sg.action !== 'WAIT') {
+      const anchorTime = analysis.candles[analysis.candles.length - 1].time
+      markers.push({
+        time: asTime(anchorTime),
+        position: sg.action === 'BUY' ? 'belowBar' : 'aboveBar',
+        color: sg.action === 'BUY' ? '#4fd39a' : '#f0736c',
+        shape: sg.action === 'BUY' ? 'arrowUp' : 'arrowDown',
+        text: `${sg.action} ${sg.grade}`,
+        size: 2,
+      })
+    }
     markers.sort((a, b) => (a.time as number) - (b.time as number))
     r.candles.setMarkers(markers)
 
@@ -253,6 +266,21 @@ export function TradingChart({
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
           title: 'INVAL',
+        }),
+      )
+    }
+    // Signal entry line — where the BUY / SELL setup is triggered.
+    if (overlays.signals && sg.action !== 'WAIT') {
+      const entry = (sg.entryLow + sg.entryHigh) / 2
+      const buy = sg.action === 'BUY'
+      r.priceLines.push(
+        r.candles.createPriceLine({
+          price: entry,
+          color: buy ? 'rgba(79,211,154,0.95)' : 'rgba(240,115,108,0.95)',
+          lineWidth: 2,
+          lineStyle: LineStyle.Solid,
+          axisLabelVisible: true,
+          title: buy ? 'BUY ▲' : 'SELL ▼',
         }),
       )
     }
