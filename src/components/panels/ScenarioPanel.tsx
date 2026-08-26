@@ -63,7 +63,8 @@ export function ScenarioPanel({ analysis }: { analysis: Analysis }) {
       </div>
 
       <p className="mt-3 text-[10px] leading-relaxed text-ink-500">
-        Solid candles are real. Translucent ghost candles and dashed paths are probabilistic projections — not guarantees.
+        Solid candles are real. Ghost candles & the band are a ~1σ / 2σ probability cone from the market's realized volatility (live XAU
+        spot via gold-api, OHLC via Binance) — probabilistic projections, not guarantees.
       </p>
     </Panel>
   )

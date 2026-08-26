@@ -115,12 +115,28 @@ export function buildForecast(inp: ForecastInputs): ForecastReport {
   const rand = mulberry32(hashSeed(`${last.time}|${timeframe}|forecast`))
   const gauss = gaussianFrom(rand)
 
-  // Move magnitudes scale with ATR and horizon.
-  const unit = (atr || px * 0.004) * Math.sqrt(steps) * 0.5
+  // Ground the projection in REALIZED volatility measured from recent returns
+  // (standard σ√t diffusion), blended with ATR for robustness. This makes the
+  // uncertainty envelope a genuine ~1σ probability cone rather than a guess.
+  const closes = candles.map((c) => c.close)
+  const rets: number[] = []
+  for (let i = Math.max(1, closes.length - 120); i < closes.length; i++) {
+    const r = Math.log(closes[i] / closes[i - 1])
+    if (Number.isFinite(r)) rets.push(r)
+  }
+  const rMean = rets.length ? rets.reduce((s, r) => s + r, 0) / rets.length : 0
+  const rVar = rets.length > 1 ? rets.reduce((s, r) => s + (r - rMean) ** 2, 0) / (rets.length - 1) : 0
+  let sigmaFrac = Math.sqrt(rVar)
+  if (!Number.isFinite(sigmaFrac) || sigmaFrac <= 0) sigmaFrac = (atr || px * 0.004) / px
+  // Per-bar σ in price: blend realized σ with ATR (both volatility measures).
+  const sigmaBar = 0.7 * (px * sigmaFrac) + 0.3 * (atr || px * sigmaFrac)
+  const horizonSigma = sigmaBar * Math.sqrt(steps) // 1σ move over the horizon
 
-  const bullMove = unit * (1.25 + (b - 0.5) * 0.8)
-  const bearMove = -unit * (1.25 + (0.5 - b) * 0.8)
-  const baseMove = unit * 0.18 * (b - 0.5)
+  // Directional move as a fraction of the horizon's 1σ, scaled by conviction.
+  const unit = horizonSigma
+  const bullMove = unit * (0.8 + (b - 0.5) * 0.9)
+  const bearMove = -unit * (0.8 + (0.5 - b) * 0.9)
+  const baseMove = unit * 0.12 * (b - 0.5)
 
   const bullScenario: Scenario = makeScenario({
     key: 'bull',
@@ -131,6 +147,7 @@ export function buildForecast(inp: ForecastInputs): ForecastReport {
     endPrice: px + bullMove,
     steps,
     atr,
+    sigmaBar,
     tfSec,
     startTime: last.time,
     shape: 'breakout-retest',
@@ -151,6 +168,7 @@ export function buildForecast(inp: ForecastInputs): ForecastReport {
     endPrice: px + baseMove,
     steps,
     atr,
+    sigmaBar,
     tfSec,
     startTime: last.time,
     shape: 'range',
@@ -170,6 +188,7 @@ export function buildForecast(inp: ForecastInputs): ForecastReport {
     endPrice: px + bearMove,
     steps,
     atr,
+    sigmaBar,
     tfSec,
     startTime: last.time,
     shape: 'breakdown',
@@ -195,6 +214,7 @@ interface MakeScenarioArgs {
   endPrice: number
   steps: number
   atr: number
+  sigmaBar: number
   tfSec: number
   startTime: UTCTimestamp
   shape: 'breakout-retest' | 'range' | 'breakdown'
@@ -206,11 +226,12 @@ interface MakeScenarioArgs {
 }
 
 function makeScenario(a: MakeScenarioArgs): Scenario {
-  const { px, endPrice, steps, atr, tfSec, startTime, shape, uncertainty } = a
+  const { px, endPrice, steps, sigmaBar, tfSec, startTime, shape, uncertainty } = a
   const path: GhostCandle[] = []
   const move = endPrice - px
   let prevClose = px
-  const vol = (atr || px * 0.004) * 0.55
+  // Per-bar σ (price) is the volatility unit for path noise, wicks and the band.
+  const vol = sigmaBar
 
   for (let i = 1; i <= steps; i++) {
     const t = i / steps
@@ -233,9 +254,10 @@ function makeScenario(a: MakeScenarioArgs): Scenario {
     const wick = vol * (0.4 + a.rand() * 0.5)
     const high = Math.max(open, close) + wick
     const low = Math.min(open, close) - wick
-    // Confidence fades with distance; band widens with sqrt(step) & scenario uncertainty.
+    // Uncertainty envelope = a genuine ~1σ diffusion cone (σ·√step), widened
+    // slightly per scenario. Confidence fades with distance into the future.
     const confidence = clamp(0.9 - t * 0.62, 0.2, 0.92)
-    const band = vol * (0.9 + Math.sqrt(i) * 0.55) * uncertainty
+    const band = vol * Math.sqrt(i) * uncertainty
     path.push({
       time: startTime + i * tfSec,
       open,
