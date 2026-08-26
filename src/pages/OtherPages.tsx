@@ -4,6 +4,7 @@ import type { LiveState } from '@/hooks/useAnalysis'
 import { ChartCard } from '@/components/chart/ChartCard'
 import { ScenarioPanel } from '@/components/panels/ScenarioPanel'
 import { SignalPanel } from '@/components/panels/SignalPanel'
+import { OutlookPanel } from '@/components/panels/OutlookPanel'
 import { ExplainPanel } from '@/components/panels/ExplainPanel'
 import { HistoricalPanel } from '@/components/panels/HistoricalPanel'
 import { MarketStrengthPanel } from '@/components/panels/MarketStrengthPanel'
@@ -27,6 +28,7 @@ export function ForecastPage({ live }: { live: LiveState }) {
           <>
             <SignalPanel analysis={live.analysis} />
             <ScenarioPanel analysis={live.analysis} />
+            <OutlookPanel analysis={live.analysis} />
             <ExplainPanel analysis={live.analysis} />
           </>
         )}

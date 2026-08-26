@@ -4,6 +4,7 @@ import { ChartCard } from '@/components/chart/ChartCard'
 import { SignalPanel } from '@/components/panels/SignalPanel'
 import { MarketStrengthPanel } from '@/components/panels/MarketStrengthPanel'
 import { ScenarioPanel } from '@/components/panels/ScenarioPanel'
+import { OutlookPanel } from '@/components/panels/OutlookPanel'
 import { PatternPanel } from '@/components/panels/PatternPanel'
 import { TradeSetupPanel } from '@/components/panels/TradeSetupPanel'
 import { ExplainPanel } from '@/components/panels/ExplainPanel'
@@ -41,6 +42,7 @@ export function Dashboard({ live }: { live: LiveState }) {
                 <SignalPanel analysis={analysis} />
                 <MarketStrengthPanel analysis={analysis} />
                 <ScenarioPanel analysis={analysis} />
+                <OutlookPanel analysis={analysis} />
                 <PatternPanel analysis={analysis} />
                 <TradeSetupPanel analysis={analysis} />
                 <ExplainPanel analysis={analysis} />
