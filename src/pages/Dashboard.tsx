@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import type { LiveState } from '@/hooks/useAnalysis'
 import { Watchlist } from '@/components/layout/Watchlist'
 import { ChartCard } from '@/components/chart/ChartCard'
@@ -14,8 +15,58 @@ import { MomentumPanel } from '@/components/panels/MomentumPanel'
 import { EventRiskPanel } from '@/components/panels/EventRiskPanel'
 import { UaeGoldPanel } from '@/components/panels/UaeGoldPanel'
 
+/* Side-panel width: draggable, remembered per browser (falls back to default). */
+const DEFAULT_SIDE_W = 366
+const MIN_SIDE_W = 300
+const SIDE_W_KEY = 'aurumpulse-side-width'
+
+function readSideW(): number {
+  try {
+    const v = Number(localStorage.getItem(SIDE_W_KEY))
+    return v >= MIN_SIDE_W ? v : DEFAULT_SIDE_W
+  } catch {
+    return DEFAULT_SIDE_W
+  }
+}
+
 export function Dashboard({ live }: { live: LiveState }) {
   const { analysis, liveCandle, price, loading, lastTick, recalcReason } = live
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [sideW, setSideW] = useState(readSideW)
+  const [dragging, setDragging] = useState(false)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDE_W_KEY, String(Math.round(sideW)))
+    } catch {
+      /* storage blocked — width just won't be remembered */
+    }
+  }, [sideW])
+
+  const startDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const grid = gridRef.current
+    if (!grid) return
+    e.preventDefault()
+    const handle = e.currentTarget
+    handle.setPointerCapture(e.pointerId)
+    setDragging(true)
+    const move = (ev: PointerEvent) => {
+      const rect = grid.getBoundingClientRect()
+      // Keep at least ~420px for the chart; side panels between 300px and 65% of the area.
+      const max = Math.max(MIN_SIDE_W, Math.min(rect.width * 0.65, rect.width - 420))
+      const w = rect.right - 8 - ev.clientX - 4
+      setSideW(Math.min(max, Math.max(MIN_SIDE_W, w)))
+    }
+    const end = () => {
+      setDragging(false)
+      handle.removeEventListener('pointermove', move)
+      handle.removeEventListener('pointerup', end)
+      handle.removeEventListener('pointercancel', end)
+    }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', end)
+    handle.addEventListener('pointercancel', end)
+  }
 
   return (
     <div className="flex h-full">
@@ -29,7 +80,25 @@ export function Dashboard({ live }: { live: LiveState }) {
 
       {/* Main grid */}
       <div className="h-full flex-1 overflow-y-auto scrollbar-thin lg:overflow-hidden">
-        <div className="flex flex-col gap-2 p-2 lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_366px] lg:grid-rows-[minmax(0,1fr)_244px]">
+        <div
+          ref={gridRef}
+          style={{ '--side-w': `${sideW}px` } as CSSProperties}
+          className="relative flex flex-col gap-2 p-2 lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_var(--side-w)] lg:grid-rows-[minmax(0,1fr)_244px]"
+        >
+          {/* Drag handle between the chart and the side panels (desktop only) */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Drag to resize the side panels (double-click to reset)"
+            title="Drag to resize · double-click to reset"
+            onPointerDown={startDrag}
+            onDoubleClick={() => setSideW(DEFAULT_SIDE_W)}
+            className={`group absolute inset-y-2 z-20 hidden w-3 cursor-col-resize touch-none justify-center lg:flex ${dragging ? 'is-dragging' : ''}`}
+            style={{ right: sideW + 6 }}
+          >
+            <div className="h-full w-px bg-white/[0.06] transition-colors group-hover:bg-gold-400/60 group-[.is-dragging]:bg-gold-300" />
+            <div className="absolute top-1/2 h-10 w-1.5 -translate-y-1/2 rounded-full bg-white/15 transition-colors group-hover:bg-gold-400/80 group-[.is-dragging]:bg-gold-300" />
+          </div>
           {/* Chart */}
           <div className="order-1 h-[56vh] min-h-0 lg:col-start-1 lg:row-start-1 lg:h-auto">
             {loading && !analysis ? <ChartSkeleton /> : <ChartCard analysis={analysis} liveCandle={liveCandle} price={price} lastTick={lastTick} recalcReason={recalcReason} />}
