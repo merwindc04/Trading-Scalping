@@ -11,8 +11,8 @@ import { useAppStore } from '@/store/appStore'
 import { useAnalysis } from '@/hooks/useAnalysis'
 
 export default function App() {
-  const { nav, symbol, timeframe, style } = useAppStore()
-  const live = useAnalysis(symbol, timeframe, style)
+  const { nav, symbol, timeframe, style, horizon, purity, macroView } = useAppStore()
+  const live = useAnalysis(symbol, timeframe, style, { horizon, purity: symbol === 'XAUAED' ? purity : '24K', macroView })
   useWatchlistScanner()
 
   return (

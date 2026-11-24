@@ -28,8 +28,8 @@ export function EventRiskPanel() {
       <div className="mb-2 flex items-center gap-2 rounded-lg border border-[var(--color-bear-500)]/25 bg-[var(--color-bear-500)]/[0.06] px-2.5 py-2">
         <AlertTriangle size={15} className="text-[var(--color-bear-400)]" />
         <div>
-          <div className="text-[11px] font-semibold text-ink-100">High-impact event in ~6h</div>
-          <div className="text-[9.5px] text-ink-400">US CPI — expect elevated volatility around the release.</div>
+          <div className="text-[11px] font-semibold text-ink-100">Sample calendar — not a live feed</div>
+          <div className="text-[9.5px] text-ink-400">Times below are illustrative. Check a live economic calendar before trading CPI / FOMC releases.</div>
         </div>
       </div>
       <div className="space-y-1">

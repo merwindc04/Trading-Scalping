@@ -20,7 +20,7 @@ export function ForecastPage({ live }: { live: LiveState }) {
   return (
     <div className="flex h-full flex-col gap-2 overflow-y-auto scrollbar-thin p-2 lg:grid lg:grid-cols-[minmax(0,1fr)_366px] lg:overflow-hidden">
       <div className="h-[56vh] min-h-0 lg:h-auto">
-        {live.analysis ? <ChartCard analysis={live.analysis} liveCandle={live.liveCandle} price={live.price} /> : null}
+        {live.analysis ? <ChartCard analysis={live.analysis} liveCandle={live.liveCandle} price={live.price} lastTick={live.lastTick} recalcReason={live.recalcReason} /> : null}
       </div>
       <aside className="flex flex-col gap-2 lg:overflow-y-auto scrollbar-thin">
         {live.analysis && (
@@ -40,7 +40,7 @@ export function HistoricalPage({ live }: { live: LiveState }) {
   return (
     <div className="flex h-full flex-col gap-2 overflow-y-auto scrollbar-thin p-2 lg:grid lg:grid-cols-[minmax(0,1fr)_366px] lg:overflow-hidden">
       <div className="h-[56vh] min-h-0 lg:h-auto">
-        {live.analysis ? <ChartCard analysis={live.analysis} liveCandle={live.liveCandle} price={live.price} /> : null}
+        {live.analysis ? <ChartCard analysis={live.analysis} liveCandle={live.liveCandle} price={live.price} lastTick={live.lastTick} recalcReason={live.recalcReason} /> : null}
       </div>
       <aside className="flex flex-col gap-2 lg:overflow-y-auto scrollbar-thin">
         {live.analysis && (

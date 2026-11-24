@@ -17,6 +17,18 @@ export interface Quote {
 
 export type CandleListener = (candle: Candle, isNewBar: boolean) => void
 
+/** Transparency info about where a symbol's numbers come from. */
+export interface SourceInfo {
+  mode: 'live' | 'demo'
+  feeds: string[]
+  /** For gold: true when candles are calibrated onto a true XAU spot quote. */
+  spotCalibrated?: boolean
+  spotPrice?: number
+  spotAt?: number
+  /** Note shown to the user about known limitations of the feed. */
+  note?: string
+}
+
 export interface MarketDataProvider {
   /** Human label surfaced in the UI (e.g. "DEMO MARKET DATA"). */
   readonly sourceLabel: string
@@ -29,6 +41,9 @@ export interface MarketDataProvider {
    * demo for the rest, or when the network/region blocks the feed).
    */
   getStatus(symbol: string): 'live' | 'demo'
+
+  /** Optional: data-source transparency for the reliability panel. */
+  getSourceInfo?(symbol: string): SourceInfo
 
   /** Return `count` historical candles ending at (or near) now. */
   getHistory(symbol: string, timeframe: Timeframe, count: number): Promise<Candle[]>

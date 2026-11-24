@@ -1,6 +1,6 @@
 import type { Candle, Timeframe } from '@/types/market'
 import { ASSETS } from '@/lib/assets'
-import type { CandleListener, MarketDataProvider, Quote } from './MarketDataProvider'
+import type { CandleListener, MarketDataProvider, Quote, SourceInfo } from './MarketDataProvider'
 import { DemoMarketDataProvider, demoMarketData } from './DemoMarketDataProvider'
 
 /* ============================================================
@@ -100,6 +100,30 @@ export class LiveMarketDataProvider implements MarketDataProvider {
 
   getStatus(symbol: string): 'live' | 'demo' {
     return this.status.get(symbol) ?? (SYMBOL_MAP[symbol] ? 'live' : 'demo')
+  }
+
+  getSourceInfo(symbol: string): SourceInfo {
+    const mapped = SYMBOL_MAP[symbol]
+    if (!mapped || this.getStatus(symbol) === 'demo') {
+      return {
+        mode: 'demo',
+        feeds: ['Simulated demo feed (seeded)'],
+        note: mapped ? 'Live feed unreachable from this network — showing simulated data.' : 'No free live feed for this symbol — simulated data only.',
+      }
+    }
+    if (mapped.binance === PAXG) {
+      const cal = this.spotCal.get(symbol)
+      const calibrated = cal != null && cal !== 1
+      return {
+        mode: 'live',
+        feeds: ['Binance PAXG/USDT — live candles & tape', calibrated ? 'gold-api.com XAU spot — level calibration' : 'XAU spot calibration unavailable (PAXG level used)', ...(symbol === 'XAUAED' ? ['USD/AED peg 3.6725 · 31.1035 g/oz'] : [])],
+        spotCalibrated: calibrated,
+        spotPrice: this.xauSpot?.price,
+        spotAt: this.xauSpot?.t,
+        note: 'PAXG trades 24/7; moves while the spot market is closed are token moves, not spot.',
+      }
+    }
+    return { mode: 'live', feeds: [`Binance ${mapped.binance} — live candles & tape`] }
   }
 
   private precisionFor(symbol: string): number {

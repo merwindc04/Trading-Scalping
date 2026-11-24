@@ -76,7 +76,7 @@ export function SignalPanel({ analysis }: { analysis: Analysis }) {
         <span>
           Expected move <span className="nums font-semibold" style={{ color: t.color }}>{fmtSigned(s.expectedMovePct)}%</span>
         </span>
-        <span className="nums">Confidence {s.confidence}% · {s.horizon}</span>
+        <span className="nums">{analysis.forecast.confidenceBasis === 'validated' ? 'Validated confidence ' + s.confidence + '%' : analysis.decision.confidenceLabel ?? 'Model confidence ' + s.confidence + '%'} · {s.horizon}</span>
       </div>
 
       {/* Condition checklist */}

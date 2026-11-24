@@ -39,6 +39,10 @@ export interface ForecastReport {
   neutral: number
   bear: number
   confidence: number
+  /** 'validated' = from the walk-forward backtest; 'model' = engine-agreement heuristic. */
+  confidenceBasis: 'validated' | 'model'
+  /** 'calibrated' = scenario probabilities from historical outcome frequencies. */
+  probabilityBasis: 'calibrated' | 'model'
   primary: Scenario
   horizonSteps: number
 }
@@ -55,6 +59,8 @@ export interface ForecastInputs {
   historicalSampleSize: number
   historicalBullishPct: number
   volatilityPct: number
+  /** Projection length in bars (from the selected forecast horizon). */
+  steps?: number
 }
 
 const HORIZON_STEPS: Record<TradingStyle, number> = {
@@ -84,7 +90,7 @@ export function buildForecast(inp: ForecastInputs): ForecastReport {
   const last = candles[candles.length - 1]
   const px = last.close
   const tfSec = TIMEFRAME_SECONDS[timeframe]
-  const steps = HORIZON_STEPS[style]
+  const steps = inp.steps ?? HORIZON_STEPS[style]
   const horizonLabel = formatHorizon(steps * tfSec)
 
   // ---- Probabilities from the ensemble bull score ----------------------
@@ -202,7 +208,48 @@ export function buildForecast(inp: ForecastInputs): ForecastReport {
   const scenarios = [bullScenario, baseScenario, bearScenario]
   const primary = [...scenarios].sort((a, z) => z.probability - a.probability)[0]
 
-  return { scenarios, bull, neutral, bear, confidence, primary, horizonSteps: steps }
+  return { scenarios, bull, neutral, bear, confidence, confidenceBasis: 'model', probabilityBasis: 'model', primary, horizonSteps: steps }
+}
+
+/**
+ * Re-ground the forecast in validated data:
+ *  • scenario probabilities ← calibrated historical outcome frequencies
+ *  • targets / invalidation ← the dynamic S/R zone ladder (one source of truth
+ *    for every target on the chart, in the panels and in the signal)
+ *  • confidence ← validated hit rate when the backtest supports one
+ */
+export function groundForecast(
+  f: ForecastReport,
+  opts: {
+    price: number
+    calibration?: { bull: number; neutral: number; bear: number } | null
+    targets: { bull: number[]; bear: number[]; neutral: number[] }
+    invalidation: { bull: number; bear: number; neutral: number }
+    confidence?: number | null
+  },
+): ForecastReport {
+  const px = opts.price
+  if (opts.calibration && opts.calibration.bull + opts.calibration.bear > 0) {
+    f.bull = opts.calibration.bull
+    f.neutral = opts.calibration.neutral
+    f.bear = opts.calibration.bear
+    f.probabilityBasis = 'calibrated'
+  }
+  for (const sc of f.scenarios) {
+    sc.probability = sc.key === 'bull' ? f.bull : sc.key === 'bear' ? f.bear : f.neutral
+    sc.targets = opts.targets[sc.key === 'base' ? 'neutral' : sc.key]
+    sc.invalidation = opts.invalidation[sc.key === 'base' ? 'neutral' : sc.key]
+    if (sc.direction !== 'NEUTRAL') {
+      const risk = Math.abs(px - sc.invalidation) || 1e-9
+      const reward = Math.abs((sc.targets[1] ?? sc.targets[0]) - px)
+      sc.riskReward = Math.round((reward / risk) * 10) / 10
+    }
+  }
+  if (opts.confidence != null) {
+    f.confidence = opts.confidence
+    f.confidenceBasis = 'validated'
+  }
+  return f
 }
 
 interface MakeScenarioArgs {

@@ -10,6 +10,33 @@ import { findHistoricalAnalogues, type HistoricalReport } from '@/lib/engines/hi
 import { buildForecast, type ForecastReport } from '@/lib/engines/forecast'
 import { buildExplanation, type ExplanationReport } from '@/lib/engines/explain'
 import { evaluateSignal, type SignalReport } from '@/lib/engines/signal'
+import { groundForecast } from '@/lib/engines/forecast'
+import { fibonacci, type FibReport } from '@/lib/engines/fibonacci'
+import { buildZones, type ZoneReport } from '@/lib/engines/zones'
+import { runBacktest, type BacktestReport } from '@/lib/engines/backtest'
+import { buildMacro, DEFAULT_MACRO_VIEW, type MacroReport, type MacroView } from '@/lib/engines/macro'
+import { buildDecision, type DecisionReport } from '@/lib/engines/decision'
+import { resolveHorizon, type HorizonKey, type ResolvedHorizon } from '@/lib/horizons'
+import type { SourceInfo } from '@/lib/providers/MarketDataProvider'
+import { TIMEFRAME_LABEL } from '@/types/market'
+
+export type Purity = '24K' | '22K' | '21K' | '18K'
+const PURITY: Record<Purity, number> = { '24K': 0.9999, '22K': 0.916, '21K': 0.875, '18K': 0.75 }
+
+export interface AnalyzeOptions {
+  horizon?: HorizonKey
+  purity?: Purity
+  macroView?: MacroView
+}
+
+/** Price multiplier for the selected gold purity (only the AED/gram gold symbol is purity-quoted). */
+export function purityScale(symbol: string, purity: Purity = '24K'): number {
+  return symbol === 'XAUAED' ? PURITY[purity] / PURITY['24K'] : 1
+}
+
+export function scaleCandle<T extends Candle>(c: T, k: number): T {
+  return k === 1 ? c : { ...c, open: c.open * k, high: c.high * k, low: c.low * k, close: c.close * k }
+}
 
 /* ============================================================
    analyze() — the ensemble orchestrator (spec §33).
@@ -70,6 +97,16 @@ export interface Analysis {
   explanation: ExplanationReport
   setup: TradeSetup
   signal: SignalReport
+  horizon: ResolvedHorizon
+  fib: FibReport
+  zones: ZoneReport
+  backtest: BacktestReport
+  macro: MacroReport
+  decision: DecisionReport
+  source: SourceInfo
+  purity: Purity
+  /** Multiplier applied to raw feed prices (purity); live ticks must use it too. */
+  priceScale: number
   generatedAt: number
 }
 
@@ -128,10 +165,15 @@ function volumeStrength(candles: Candle[]): number {
   return clamp(50 + ((upVol - dnVol) / total) * 55, 6, 96)
 }
 
-export async function analyze(symbol: string, timeframe: Timeframe, style: TradingStyle): Promise<Analysis> {
+export async function analyze(symbol: string, timeframe: Timeframe, style: TradingStyle, opts: AnalyzeOptions = {}): Promise<Analysis> {
   const asset = ASSETS[symbol] ?? ASSETS.XAUUSD
-  const candles = await marketData.getHistory(symbol, timeframe, 320)
-  const corpus = await marketData.getHistory(symbol, timeframe, 480)
+  const purity = opts.purity ?? '24K'
+  const k = purityScale(symbol, purity)
+  // One deep fetch: the last 320 bars drive the engines & chart, the full
+  // history (up to 1000 bars) feeds the walk-forward backtest.
+  const full = (await marketData.getHistory(symbol, timeframe, 1000)).map((c) => scaleCandle(c, k))
+  const candles = full.slice(-320)
+  const corpus = full.slice(-480)
   const last = candles[candles.length - 1]
   const prev = candles[candles.length - 2] ?? last
 
@@ -148,7 +190,10 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
   const patterns = detectPatterns(candles, structure.swings, snap.atr, patternBias)
   const pattern = patterns[0]
   const historical = findHistoricalAnalogues(corpus, Math.min(50, Math.floor(corpus.length / 6)), 20)
-  const mtf = await buildMTF(symbol)
+  const [mtf, macro] = await Promise.all([buildMTF(symbol), buildMacro(symbol, opts.macroView ?? DEFAULT_MACRO_VIEW)])
+  const source: SourceInfo = marketData.getSourceInfo?.(symbol) ?? { mode: marketData.getStatus(symbol), feeds: [marketData.sourceLabel] }
+  const horizon = resolveHorizon(opts.horizon ?? 'auto', timeframe, style)
+  const backtest = runBacktest(full, horizon.steps)
 
   // Directioned pattern strength (bull-positive).
   const patternComponent =
@@ -198,6 +243,33 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     historicalSampleSize: historical.sampleSize,
     historicalBullishPct: historical.bullishPct,
     volatilityPct: snap.atrPct,
+    steps: horizon.steps,
+  })
+
+  // ---- Dynamic S/R zones + Fibonacci, driven by validated drift & realized σ ----
+  const fib = fibonacci(candles)
+  const shrink = backtest.current.nEff / (backtest.current.nEff + 6)
+  const zones = buildZones({
+    candles,
+    atr: snap.atr,
+    sigmaBar: backtest.sigmaBar,
+    driftPerBar: backtest.current.driftPerBar * shrink,
+    steps: horizon.steps,
+    fib,
+    structureEvents: structure.events,
+  })
+  // Zones are the single source for S/R across the app.
+  structure.nearestSupport = zones.immediateSupport.center
+  structure.nearestResistance = zones.immediateResistance.center
+  structure.breakoutLevel = zones.immediateResistance.top
+  structure.levels = zones.zones.map((z) => ({ price: z.center, kind: z.kind, strength: z.touches, label: z.kind === 'resistance' ? 'Resistance' : 'Support' }))
+
+  // Calibrated probabilities + zone-based targets/invalidation for every scenario.
+  groundForecast(forecast, {
+    price: last.close,
+    calibration: backtest.evaluations > 0 ? backtest.calibration : null,
+    targets: zones.targets,
+    invalidation: { bull: zones.invalidation.bull, bear: zones.invalidation.bear, neutral: zones.immediateSupport.bottom },
   })
 
   // Align the projected primary scenario with the directional read so the chart
@@ -205,18 +277,6 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
   const activeKey = bias === 'BULLISH' ? 'bull' : bias === 'BEARISH' ? 'bear' : 'base'
   const activeScenario = forecast.scenarios.find((s) => s.key === activeKey) ?? forecast.primary
   forecast.primary = activeScenario
-
-  const explanation = buildExplanation({
-    symbolName: asset.name,
-    direction: bias,
-    technical,
-    structure,
-    pattern,
-    forecast,
-    historical,
-    mtfSummary: { aligned: mtf.alignmentPct, conflict: mtf.conflict },
-    precision: asset.precision,
-  })
 
   // Entry zone anchored to price; stop & targets come from the active scenario.
   const spread = snap.atr * 0.5
@@ -231,21 +291,21 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     horizon: activeScenario.durationLabel,
   }
 
-  const signal = evaluateSignal({
+  const signalInput = (confidence: number) => ({
     symbol,
     price: last.close,
     strengthOverall: bullScore,
     direction: bias,
     bull: forecast.bull,
     bear: forecast.bear,
-    confidence: forecast.confidence,
+    confidence,
     rsi: snap.rsi,
     momentumScore: technical.momentumScore,
     mtfAlignment: mtf.alignmentPct,
     mtfDominant: mtf.dominant,
     patternName: pattern.name,
     patternDirection: pattern.direction,
-    breakoutLevel: pattern.breakoutLevel,
+    breakoutLevel: zones.immediateResistance.top,
     trendLabel: structure.trendLabel,
     structureTrend: structure.trend,
     entryLow: setup.entryLow,
@@ -254,6 +314,64 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     targets: setup.targets,
     riskReward: setup.riskReward,
     horizon: setup.horizon,
+  })
+  // The action itself never depends on confidence, so a provisional pass is safe.
+  const provisional = evaluateSignal(signalInput(forecast.confidence))
+
+  const decision = buildDecision({
+    candles,
+    timeframeLabel: TIMEFRAME_LABEL[timeframe],
+    horizonLabel: horizon.label,
+    bias,
+    overall: bullScore,
+    technical,
+    structure,
+    mtf,
+    volumeScore: volumeComponent,
+    historical,
+    backtest,
+    zones,
+    fib,
+    macro,
+    probabilities: { bull: forecast.bull, neutral: forecast.neutral, bear: forecast.bear, basis: forecast.probabilityBasis },
+    signalAction: provisional.action,
+    source,
+    precision: asset.precision,
+  })
+
+  // Validated confidence replaces the heuristic everywhere it is shown.
+  groundForecast(forecast, {
+    price: last.close,
+    targets: zones.targets,
+    invalidation: { bull: zones.invalidation.bull, bear: zones.invalidation.bear, neutral: zones.immediateSupport.bottom },
+    confidence: decision.confidence,
+  })
+  setup.confidence = forecast.confidence
+
+  let signal = evaluateSignal(signalInput(forecast.confidence))
+  // The decision layer is authoritative: an unconfirmed or unvalidated call is never shown as BUY/SELL.
+  if ((decision.signal === 'WAIT_CONFIRM' || decision.signal === 'INSUFFICIENT') && signal.action !== 'WAIT') {
+    signal = {
+      ...signal,
+      action: 'WAIT',
+      headline: 'WAIT',
+      strong: false,
+      subline: decision.signalLabel,
+      timing: decision.signalReason,
+      triggerKey: `${symbol}|WAIT|std`,
+    }
+  }
+
+  const explanation = buildExplanation({
+    symbolName: asset.name,
+    direction: bias,
+    technical,
+    structure,
+    pattern,
+    forecast,
+    historical,
+    mtfSummary: { aligned: mtf.alignmentPct, conflict: mtf.conflict },
+    precision: asset.precision,
   })
 
   return {
@@ -277,6 +395,15 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     explanation,
     setup,
     signal,
+    horizon,
+    fib,
+    zones,
+    backtest,
+    macro,
+    decision,
+    source,
+    purity,
+    priceScale: k,
     generatedAt: Date.now(),
   }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { marketData } from '@/lib/providers/LiveMarketDataProvider'
 import { fmt, fmtSigned } from '@/lib/format'
+import { useAppStore, type Purity } from '@/store/appStore'
 
 /* ============================================================
    UAE Gold module (spec §26)
@@ -25,6 +26,13 @@ interface GoldState {
 export function UaeGoldPanel() {
   const [g, setG] = useState<GoldState | null>(null)
   const [ccy, setCcy] = useState<'AED' | 'USD'>('AED')
+  const { purity, setPurity, symbol, setSymbol } = useAppStore()
+  // Selecting a karat drives the chart, forecast and signal panel (AED/g at that purity).
+  const pick = (k: string) => {
+    setPurity(k as Purity)
+    if (symbol !== 'XAUAED') setSymbol('XAUAED')
+  }
+  const active = symbol === 'XAUAED' ? purity : null
 
   useEffect(() => {
     let alive = true
@@ -73,11 +81,11 @@ export function UaeGoldPanel() {
       {/* Headline: 24K per gram */}
       <div className="mb-2.5 rounded-lg border border-gold-500/15 bg-gradient-to-br from-gold-500/[0.08] to-transparent px-2.5 py-2">
         <div className="flex items-baseline justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-ink-500">24K · per gram</span>
+          <span className="text-[10px] uppercase tracking-wide text-ink-500">{active ?? '24K'} · per gram</span>
           <span className="nums text-[9px] text-ink-500">{ccy}</span>
         </div>
         <div className="mt-0.5 flex items-baseline gap-1.5">
-          <span className="nums gold-text text-2xl font-bold">{fmt(perGram('24K'), 2)}</span>
+          <span className="nums gold-text text-2xl font-bold">{fmt(perGram(active ?? '24K'), 2)}</span>
           <span className="text-[10px] font-medium text-ink-500">{ccy}/g</span>
         </div>
       </div>
@@ -85,11 +93,17 @@ export function UaeGoldPanel() {
       {/* Karat grid */}
       <div className="grid grid-cols-2 gap-1.5">
         {Object.keys(KARAT_PURITY).map((k) => (
-          <div key={k} className="rounded-md bg-base-800 px-2 py-1.5">
+          <button
+            key={k}
+            onClick={() => pick(k)}
+            title={'Chart gold in AED/g at ' + k}
+            aria-pressed={active === k}
+            className={'rounded-md px-2 py-1.5 text-left transition-colors ' + (active === k ? 'bg-gold-500/[0.12] ring-1 ring-gold-500/40' : 'bg-base-800 hover:bg-base-750')}
+          >
             <div className="text-[9px] uppercase tracking-wide text-ink-500">{k}</div>
             <div className="nums text-[13px] font-semibold text-gold-100">{fmt(perGram(k), 2)}</div>
             <div className="text-[8px] text-ink-500">{ccy}/g</div>
-          </div>
+          </button>
         ))}
       </div>
 

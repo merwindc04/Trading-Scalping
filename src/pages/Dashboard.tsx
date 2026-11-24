@@ -14,7 +14,7 @@ import { EventRiskPanel } from '@/components/panels/EventRiskPanel'
 import { UaeGoldPanel } from '@/components/panels/UaeGoldPanel'
 
 export function Dashboard({ live }: { live: LiveState }) {
-  const { analysis, liveCandle, price, loading } = live
+  const { analysis, liveCandle, price, loading, lastTick, recalcReason } = live
 
   return (
     <div className="flex h-full">
@@ -31,7 +31,7 @@ export function Dashboard({ live }: { live: LiveState }) {
         <div className="flex flex-col gap-2 p-2 lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_366px] lg:grid-rows-[minmax(0,1fr)_244px]">
           {/* Chart */}
           <div className="order-1 h-[56vh] min-h-0 lg:col-start-1 lg:row-start-1 lg:h-auto">
-            {loading && !analysis ? <ChartSkeleton /> : <ChartCard analysis={analysis} liveCandle={liveCandle} price={price} />}
+            {loading && !analysis ? <ChartSkeleton /> : <ChartCard analysis={analysis} liveCandle={liveCandle} price={price} lastTick={lastTick} recalcReason={recalcReason} />}
           </div>
 
           {/* Right analysis stack */}

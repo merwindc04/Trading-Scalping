@@ -3,6 +3,19 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Timeframe, TradingStyle } from '@/types/market'
 import { PRIMARY_ASSET, WATCHLIST_DEFAULT } from '@/lib/assets'
 import type { ScenarioKey } from '@/lib/engines/forecast'
+import type { HorizonKey } from '@/lib/horizons'
+import { DEFAULT_MACRO_VIEW, type MacroKey, type MacroStance, type MacroView } from '@/lib/engines/macro'
+
+export type Purity = '24K' | '22K' | '21K' | '18K'
+export const PURITY_FACTOR: Record<Purity, number> = { '24K': 0.9999, '22K': 0.916, '21K': 0.875, '18K': 0.75 }
+export type ChartType = 'candles' | 'line'
+export interface IntelPanelState {
+  collapsed: boolean
+  opacity: number // 0.35..1
+  /** Offset from the chart's top-left corner, px (left side = older bars, keeps live price visible). */
+  x: number
+  y: number
+}
 
 export type NavKey =
   | 'Dashboard'
@@ -26,6 +39,8 @@ export interface OverlayToggles {
   ghost: boolean // Ghost candles + envelope
   pattern: boolean // pattern outline
   signals: boolean // BUY/SELL marker + entry line
+  fib: boolean // Fibonacci retracement levels
+  intel: boolean // Confidence & Signal glass panel
 }
 
 export type ScenarioView = ScenarioKey | 'all'
@@ -54,6 +69,11 @@ interface AppState {
   chatOpen: boolean
   notifyEnabled: boolean
   alertRules: AlertRules
+  horizon: HorizonKey
+  purity: Purity
+  chartType: ChartType
+  macroView: MacroView
+  intelPanel: IntelPanelState
 
   setNav: (n: NavKey) => void
   setSymbol: (s: string) => void
@@ -66,6 +86,11 @@ interface AppState {
   setAlertRules: (patch: Partial<AlertRules>) => void
   addToWatchlist: (s: string) => void
   removeFromWatchlist: (s: string) => void
+  setHorizon: (h: HorizonKey, tf?: Timeframe) => void
+  setPurity: (p: Purity) => void
+  setChartType: (t: ChartType) => void
+  setMacro: (k: MacroKey, v: MacroStance) => void
+  setIntelPanel: (patch: Partial<IntelPanelState>) => void
 }
 
 const STYLE_DEFAULT_TF: Record<TradingStyle, Timeframe> = {
@@ -85,9 +110,12 @@ const DEFAULT_OVERLAYS: OverlayToggles = {
   ghost: true,
   pattern: true,
   signals: true,
+  fib: false,
+  intel: true,
 }
 
 const DEFAULT_ALERT_RULES: AlertRules = { minGrade: 'B', direction: 'both', entryZone: false }
+const DEFAULT_INTEL: IntelPanelState = { collapsed: false, opacity: 0.86, x: 12, y: 60 }
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -102,11 +130,21 @@ export const useAppStore = create<AppState>()(
       chatOpen: false,
       notifyEnabled: false,
       alertRules: DEFAULT_ALERT_RULES,
+      horizon: 'auto',
+      purity: '24K',
+      chartType: 'candles',
+      macroView: DEFAULT_MACRO_VIEW,
+      intelPanel: DEFAULT_INTEL,
 
       setNav: (nav) => set({ nav }),
       setSymbol: (symbol) => set({ symbol }),
       setTimeframe: (timeframe) => set({ timeframe }),
-      setStyle: (style) => set({ style, timeframe: STYLE_DEFAULT_TF[style] }),
+      setStyle: (style) => set({ style, timeframe: STYLE_DEFAULT_TF[style], horizon: 'auto' }),
+      setHorizon: (horizon, tf) => set(tf ? { horizon, timeframe: tf } : { horizon }),
+      setPurity: (purity) => set({ purity }),
+      setChartType: (chartType) => set({ chartType }),
+      setMacro: (k, v) => set((s) => ({ macroView: { ...s.macroView, [k]: v } })),
+      setIntelPanel: (patch) => set((s) => ({ intelPanel: { ...s.intelPanel, ...patch } })),
       toggleOverlay: (k) => set((s) => ({ overlays: { ...s.overlays, [k]: !s.overlays[k] } })),
       setScenarioView: (scenarioView) => set({ scenarioView }),
       toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
@@ -130,6 +168,11 @@ export const useAppStore = create<AppState>()(
         scenarioView: s.scenarioView,
         notifyEnabled: s.notifyEnabled,
         alertRules: s.alertRules,
+        horizon: s.horizon,
+        purity: s.purity,
+        chartType: s.chartType,
+        macroView: s.macroView,
+        intelPanel: s.intelPanel,
       }),
       // Deep-merge so newly-added overlay/rule keys keep their defaults.
       merge: (persisted, current) => {
@@ -139,6 +182,8 @@ export const useAppStore = create<AppState>()(
           ...p,
           overlays: { ...DEFAULT_OVERLAYS, ...(p.overlays ?? {}) },
           alertRules: { ...DEFAULT_ALERT_RULES, ...(p.alertRules ?? {}) },
+          macroView: { ...DEFAULT_MACRO_VIEW, ...(p.macroView ?? {}) },
+          intelPanel: { ...DEFAULT_INTEL, ...(p.intelPanel ?? {}) },
         }
       },
     },

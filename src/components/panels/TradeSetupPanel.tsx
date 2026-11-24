@@ -33,7 +33,7 @@ export function TradeSetupPanel({ analysis }: { analysis: Analysis }) {
       <div className="mt-2 grid grid-cols-4 gap-1.5">
         <Kv label="Invalidation" value={fmt(s.invalidation, p)} tone="bear" />
         <Kv label="Risk / Reward" value={`1:${s.riskReward}`} tone="gold" />
-        <Kv label="Confidence" value={`${s.confidence}%`} />
+        <Kv label="Confidence" value={analysis.forecast.confidenceBasis === 'validated' ? `${s.confidence}%` : analysis.decision.confidenceLabel ?? `${s.confidence}% (model)`} />
         <Kv label="Horizon" value={s.horizon} />
       </div>
 

@@ -26,7 +26,7 @@ export function ScenarioPanel({ analysis }: { analysis: Analysis }) {
       }
       right={
         <span className="rounded-full border border-gold-500/25 bg-gold-500/[0.06] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-gold-200">
-          Confidence {f.confidence}%
+          {f.confidenceBasis === 'validated' ? 'Validated ' + f.confidence + '%' : analysis.decision.confidenceLabel ?? 'Model ' + f.confidence + '%'}
         </span>
       }
     >

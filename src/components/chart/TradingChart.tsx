@@ -12,7 +12,8 @@ import {
 } from 'lightweight-charts'
 import type { Candle } from '@/types/market'
 import type { Analysis } from '@/lib/analyze'
-import type { OverlayToggles, ScenarioView } from '@/store/appStore'
+import type { ChartType, OverlayToggles, ScenarioView } from '@/store/appStore'
+import { ChartOverlayPrimitive, type BandDraw, type ZoneDraw } from './overlayPrimitive'
 import { dirColor } from '@/lib/format'
 
 /* ============================================================
@@ -50,6 +51,8 @@ interface Refs {
   bbU: ISeriesApi<'Line'>
   bbL: ISeriesApi<'Line'>
   proj: Record<string, ISeriesApi<'Line'>>
+  line: ISeriesApi<'Area'>
+  overlay: ChartOverlayPrimitive
   priceLines: IPriceLine[]
 }
 
@@ -58,16 +61,21 @@ export function TradingChart({
   liveCandle,
   overlays,
   scenarioView,
+  chartType = 'candles',
 }: {
   analysis: Analysis | null
   liveCandle: Candle | null
   overlays: OverlayToggles
   scenarioView: ScenarioView
+  chartType?: ChartType
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const refs = useRef<Refs | null>(null)
   const lastView = useRef<string>('')
   const lastBarTime = useRef<number>(0)
+  // Smooth tick animation state
+  const shown = useRef<{ time: number; close: number } | null>(null)
+  const anim = useRef<number>(0)
 
   // --- create chart once ---
   useEffect(() => {
@@ -143,7 +151,21 @@ export function TradingChart({
       bear: mkLine(SCENARIO_COLORS.bear, 2, LineStyle.Dashed),
     }
 
-    refs.current = { chart, candles, volume, ghost, envUpper, envLower, ema9, ema20, ema50, vwap, bbU, bbL, proj, priceLines: [] }
+    const line = chart.addAreaSeries({
+      lineColor: '#e8c877',
+      lineWidth: 2,
+      topColor: 'rgba(232,200,119,0.18)',
+      bottomColor: 'rgba(232,200,119,0.0)',
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: true,
+      visible: false,
+    })
+
+    const overlay = new ChartOverlayPrimitive()
+    candles.attachPrimitive(overlay)
+
+    refs.current = { chart, candles, volume, ghost, envUpper, envLower, ema9, ema20, ema50, vwap, bbU, bbL, proj, line, overlay, priceLines: [] }
 
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
@@ -153,6 +175,7 @@ export function TradingChart({
 
     return () => {
       ro.disconnect()
+      cancelAnimationFrame(anim.current)
       chart.remove()
       refs.current = null
     }
@@ -168,6 +191,17 @@ export function TradingChart({
     // Candles + volume
     r.candles.setData(
       analysis.candles.map((c) => ({ time: asTime(c.time), open: c.open, high: c.high, low: c.low, close: c.close })),
+    )
+    // Line mode: draw closes as an area line; candles stay (transparent) so
+    // markers, price lines and the zone overlay keep working in both modes.
+    const lineMode = chartType === 'line'
+    r.line.setData(analysis.candles.map((c) => ({ time: asTime(c.time), value: c.close })))
+    r.line.applyOptions({ visible: lineMode })
+    const clear = 'rgba(0,0,0,0)'
+    r.candles.applyOptions(
+      lineMode
+        ? { upColor: clear, downColor: clear, borderUpColor: clear, borderDownColor: clear, wickUpColor: clear, wickDownColor: clear }
+        : { upColor: UP, downColor: DOWN, borderUpColor: UP, borderDownColor: DOWN, wickUpColor: 'rgba(53,180,127,0.75)', wickDownColor: 'rgba(224,85,78,0.75)' },
     )
     r.volume.setData(
       analysis.candles.map((c) => ({ time: asTime(c.time), value: c.volume, color: c.close >= c.open ? 'rgba(53,180,127,0.28)' : 'rgba(224,85,78,0.28)' })),
@@ -243,16 +277,43 @@ export function TradingChart({
     // Price lines: S/R levels + primary targets + invalidation
     for (const pl of r.priceLines) r.candles.removePriceLine(pl)
     r.priceLines = []
+    // Dynamic S/R zones: shaded bands via the overlay primitive, plus axis labels
+    // for the immediate floor / ceiling and the confirmation level of the bias.
+    const zd = analysis.zones
+    const zonesDraw: ZoneDraw[] = []
     if (overlays.levels) {
-      for (const lvl of analysis.structure.levels) {
+      for (const z of zd.zones) {
+        const res = z.kind === 'resistance'
+        const isImm = z.id === zd.immediateSupport.id || z.id === zd.immediateResistance.id
+        const isMajor = z.id === zd.majorSupport.id || z.id === zd.majorResistance.id
+        const a = 0.05 + (z.strength / 100) * 0.13
+        zonesDraw.push({
+          top: z.top,
+          bottom: z.bottom,
+          fill: res ? `rgba(240,115,108,${a})` : `rgba(79,211,154,${a})`,
+          stroke: res ? 'rgba(240,115,108,0.55)' : 'rgba(79,211,154,0.55)',
+          label: isImm || isMajor ? `${res ? 'Resistance' : 'Support'}${isMajor ? ' · major' : ''} · ${z.strength}` : '',
+          emphasis: isImm || isMajor,
+        })
+      }
+      const axis = (price: number, color: string, title: string, style: LineStyle = LineStyle.Dashed) =>
+        r.priceLines.push(r.candles.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }))
+      axis(zd.immediateResistance.center, 'rgba(240,115,108,0.6)', 'R')
+      axis(zd.immediateSupport.center, 'rgba(79,211,154,0.6)', 'S')
+      if (analysis.bias === 'BULLISH') axis(zd.confirmation.bull, 'rgba(79,211,154,0.9)', 'CONF ▲', LineStyle.SparseDotted)
+      if (analysis.bias === 'BEARISH') axis(zd.confirmation.bear, 'rgba(240,115,108,0.9)', 'CONF ▼', LineStyle.SparseDotted)
+    }
+    if (overlays.fib) {
+      for (const l of analysis.fib.levels) {
+        if (l.ratio === 0 || l.ratio === 1) continue
         r.priceLines.push(
           r.candles.createPriceLine({
-            price: lvl.price,
-            color: lvl.kind === 'resistance' ? 'rgba(240,115,108,0.5)' : 'rgba(79,211,154,0.5)',
+            price: l.price,
+            color: l.kind === 'extension' ? 'rgba(180,140,255,0.5)' : 'rgba(120,200,255,0.45)',
             lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: lvl.kind === 'resistance' ? 'R' : 'S',
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: false,
+            title: `Fib ${l.label}`,
           }),
         )
       }
@@ -321,6 +382,20 @@ export function TradingChart({
       r.envLower.setData([])
     }
 
+    // Filled confidence bands: every visible scenario faintly, the focused one stronger.
+    const BAND: Record<string, string> = { bull: '79,211,154', base: '168,174,186', bear: '240,115,108' }
+    const bands: BandDraw[] = []
+    for (const sc of analysis.forecast.scenarios) {
+      const focused = sc.key === ghostSc.key
+      const visible = (overlays.ghost && focused) || (overlays.projected && (scenarioView === 'all' || scenarioView === sc.key))
+      if (!visible) continue
+      bands.push({
+        points: [{ time: anchor.time, hi: anchor.close, lo: anchor.close }, ...sc.path.map((g) => ({ time: g.time, hi: g.bandHigh, lo: g.bandLow }))],
+        fill: `rgba(${BAND[sc.key]},${focused ? 0.1 : 0.04})`,
+      })
+    }
+    r.overlay.setData({ zones: zonesDraw, bands, nowTime: overlays.projected || overlays.ghost ? anchor.time : null })
+
     // Track the last real bar's time so live ticks can't feed out-of-order data.
     lastBarTime.current = analysis.candles[analysis.candles.length - 1].time
 
@@ -331,23 +406,50 @@ export function TradingChart({
       r.chart.timeScale().fitContent()
     }
     void p
-  }, [analysis, overlays, scenarioView])
+  }, [analysis, overlays, scenarioView, chartType])
 
-  // --- live forming candle ---
+  // --- live forming candle (smoothly animated between ticks) ---
   useEffect(() => {
     const r = refs.current
     if (!r || !liveCandle) return
     // Guard against stale ticks from a prior timeframe's stream arriving after a
     // switch — lightweight-charts throws if update() goes back in time.
     if (liveCandle.time < lastBarTime.current) return
-    const t = liveCandle.time as Time
-    try {
-      r.candles.update({ time: t, open: liveCandle.open, high: liveCandle.high, low: liveCandle.low, close: liveCandle.close })
-      r.volume.update({ time: t, value: liveCandle.volume, color: liveCandle.close >= liveCandle.open ? 'rgba(53,180,127,0.28)' : 'rgba(224,85,78,0.28)' })
-      lastBarTime.current = liveCandle.time
-    } catch {
-      /* out-of-order tick during a source switch — ignore */
+    const c = liveCandle
+    const t = c.time as Time
+    const push = (close: number) => {
+      try {
+        r.candles.update({ time: t, open: c.open, high: Math.max(c.high, close), low: Math.min(c.low, close), close })
+        r.line.update({ time: t, value: close })
+      } catch {
+        /* out-of-order tick during a source switch — ignore */
+      }
     }
+    try {
+      r.volume.update({ time: t, value: c.volume, color: c.close >= c.open ? 'rgba(53,180,127,0.28)' : 'rgba(224,85,78,0.28)' })
+    } catch {
+      return
+    }
+    lastBarTime.current = c.time
+    cancelAnimationFrame(anim.current)
+    const from = shown.current && shown.current.time === c.time ? shown.current.close : c.close
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (from === c.close || reduce) {
+      push(c.close)
+      shown.current = { time: c.time, close: c.close }
+      return
+    }
+    const start = performance.now()
+    const DUR = 320
+    const step = (now: number) => {
+      const k = Math.min(1, (now - start) / DUR)
+      const e = 1 - Math.pow(1 - k, 3)
+      const v = from + (c.close - from) * e
+      push(v)
+      shown.current = { time: c.time, close: v }
+      if (k < 1) anim.current = requestAnimationFrame(step)
+    }
+    anim.current = requestAnimationFrame(step)
   }, [liveCandle])
 
   return <div ref={containerRef} className="h-full w-full" />

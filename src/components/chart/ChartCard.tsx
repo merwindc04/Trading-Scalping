@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { Maximize2, Minimize2, Layers, TrendingUp, Ruler, Activity, Sparkles, Ghost, Waves, Target } from 'lucide-react'
+import { Maximize2, Minimize2, Layers, TrendingUp, Ruler, Activity, Sparkles, Ghost, Waves, Target, Gauge, Spline, CandlestickChart, LineChart } from 'lucide-react'
+import { IntelOverlay } from './IntelOverlay'
+import { HORIZONS, type HorizonKey } from '@/lib/horizons'
+import type { Purity } from '@/store/appStore'
 import type { Analysis } from '@/lib/analyze'
 import type { Candle } from '@/types/market'
 import { TradingChart } from './TradingChart'
@@ -22,10 +25,26 @@ const TOGGLES: { key: keyof OverlayToggles; label: string; icon: typeof Layers }
   { key: 'projected', label: 'Projected', icon: Sparkles },
   { key: 'ghost', label: 'Ghost', icon: Ghost },
   { key: 'signals', label: 'Signals', icon: Target },
+  { key: 'fib', label: 'Fib', icon: Spline },
+  { key: 'intel', label: 'Intel', icon: Gauge },
 ]
 
-export function ChartCard({ analysis, liveCandle, price }: { analysis: Analysis | null; liveCandle: Candle | null; price: number | null }) {
-  const { overlays, toggleOverlay, scenarioView, symbol, timeframe, setTimeframe, style, setStyle } = useAppStore()
+const PURITIES: Purity[] = ['24K', '22K', '21K', '18K']
+
+export function ChartCard({
+  analysis,
+  liveCandle,
+  price,
+  lastTick = null,
+  recalcReason = null,
+}: {
+  analysis: Analysis | null
+  liveCandle: Candle | null
+  price: number | null
+  lastTick?: number | null
+  recalcReason?: string | null
+}) {
+  const { overlays, toggleOverlay, scenarioView, symbol, timeframe, setTimeframe, style, setStyle, horizon, setHorizon, chartType, setChartType, purity, setPurity } = useAppStore()
   const [full, setFull] = useState(false)
 
   const changePct = analysis?.changePct ?? 0
@@ -45,7 +64,7 @@ export function ChartCard({ analysis, liveCandle, price }: { analysis: Analysis 
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="nums text-lg font-bold text-ink-100">{price == null ? '—' : fmt(price, analysis?.precision ?? 2)}</span>
-            {ASSETS[symbol]?.unit && <span className="text-[10px] text-ink-500">{ASSETS[symbol].unit}</span>}
+            {ASSETS[symbol]?.unit && <span className="text-[10px] text-ink-500">{ASSETS[symbol].unit}{symbol === 'XAUAED' ? ` · ${purity}` : ''}</span>}
             <span className={`nums text-[12px] font-medium ${up ? dirText.BULLISH : dirText.BEARISH}`}>{fmtSigned(changePct)}%</span>
           </div>
         </div>
@@ -80,10 +99,62 @@ export function ChartCard({ analysis, liveCandle, price }: { analysis: Analysis 
               )
             })}
           </div>
+          <div className="flex items-center gap-0.5 rounded-lg border border-white/[0.06] bg-base-800 p-0.5">
+            {(['candles', 'line'] as const).map((t) => {
+              const Icon = t === 'candles' ? CandlestickChart : LineChart
+              return (
+                <button
+                  key={t}
+                  onClick={() => setChartType(t)}
+                  title={t === 'candles' ? 'Candlestick chart' : 'Line chart'}
+                  aria-label={t === 'candles' ? 'Candlestick chart' : 'Line chart'}
+                  className={`rounded-md px-1.5 py-1 ${chartType === t ? 'bg-white/[0.08] text-gold-200' : 'text-ink-500 hover:text-ink-300'}`}
+                >
+                  <Icon size={12} />
+                </button>
+              )
+            })}
+          </div>
           <button onClick={() => setFull((v) => !v)} className="btn !px-2" title="Fullscreen">
             {full ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
         </div>
+      </div>
+
+      {/* Forecast horizon (5 min → 1 year) + gold purity */}
+      <div className="flex items-center gap-2 border-b border-white/[0.05] px-2 py-1.5">
+        <span className="shrink-0 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-ink-500">Forecast</span>
+        <div className="flex flex-1 items-center gap-0.5 overflow-x-auto scrollbar-thin">
+          {([{ key: 'auto', label: 'Auto' }, ...HORIZONS] as { key: HorizonKey; label: string; tf?: Timeframe }[]).map((h) => (
+            <button
+              key={h.key}
+              onClick={() => setHorizon(h.key, h.tf)}
+              title={h.tf ? `Project ${h.label} ahead (uses the ${TIMEFRAME_LABEL[h.tf]} chart)` : 'Horizon follows the trading style'}
+              className={`nums shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium ${horizon === h.key ? 'bg-white/[0.08] text-gold-200' : 'text-ink-500 hover:text-ink-300'}`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
+        {analysis && (
+          <span className="hidden shrink-0 text-[9.5px] text-ink-500 sm:inline" title="Projection length on the current timeframe">
+            {analysis.horizon.steps} bars ≈ {analysis.horizon.label}
+            {analysis.horizon.truncated && <span className="text-[var(--color-neutral-400)]"> · capped</span>}
+          </span>
+        )}
+        {symbol === 'XAUAED' && (
+          <div className="flex shrink-0 items-center rounded-lg border border-gold-500/20 bg-base-800 p-0.5" role="group" aria-label="Gold purity">
+            {PURITIES.map((k) => (
+              <button
+                key={k}
+                onClick={() => setPurity(k)}
+                className={`rounded-md px-1.5 py-0.5 text-[9.5px] font-semibold ${purity === k ? 'bg-white/[0.08] text-gold-200' : 'text-ink-500'}`}
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Mobile timeframe + style controls (desktop has them in the top nav) */}
@@ -114,11 +185,12 @@ export function ChartCard({ analysis, liveCandle, price }: { analysis: Analysis 
 
       {/* Chart */}
       <div className="relative flex-1">
-        <TradingChart analysis={analysis} liveCandle={liveCandle} overlays={overlays} scenarioView={scenarioView} />
+        <TradingChart analysis={analysis} liveCandle={liveCandle} overlays={overlays} scenarioView={scenarioView} chartType={chartType} />
+        {analysis && overlays.intel && <IntelOverlay analysis={analysis} lastTick={lastTick} recalcReason={recalcReason} />}
         {/* Legend */}
         <div className="pointer-events-none absolute left-3 top-2.5 flex flex-col gap-1 text-[9.5px]">
-          <LegendRow color="#35b47f" label="Real candles (live)" solid />
-          {overlays.ghost && <LegendRow color="rgba(79,211,154,0.55)" label="Ghost candles — projection" />}
+          <LegendRow color="#35b47f" label="Actual market (live)" solid />
+          {overlays.ghost && <LegendRow color="rgba(79,211,154,0.55)" label="Ghost candles — projected, not real" />}
           {overlays.projected && (
             <div className="flex items-center gap-2">
               <Legend color="#4fd39a" label="Bull" />
