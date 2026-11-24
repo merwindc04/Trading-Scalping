@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, BookOpen, Clock, LineChart, Settings as SettingsIcon, Database, Layers3, Plus, Check } from 'lucide-react'
+import { Bell, BookOpen, LineChart, Settings as SettingsIcon, Database, Layers3, Plus, Check } from 'lucide-react'
 import type { LiveState } from '@/hooks/useAnalysis'
 import { ChartCard } from '@/components/chart/ChartCard'
 import { ScenarioPanel } from '@/components/panels/ScenarioPanel'
@@ -302,24 +302,10 @@ function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
   )
 }
 
-/* ---------- Roadmap pages ---------- */
-export function BacktestingPage() {
-  return (
-    <RoadmapShell
-      icon={Clock}
-      title="Forecast Time Machine"
-      sub="Replay any historical date, generate the forecast from only what was known then, and reveal the actual outcome to score the model honestly."
-      phase="Phase 6"
-      bullets={[
-        'Pick a historical date — all future candles are hidden.',
-        'AurumPulse forecasts using only information available at that moment.',
-        'Reveal the real market and compare predicted vs actual direction, target and invalidation accuracy.',
-        'Feeds a transparent Model Performance dashboard: directional accuracy, target hit-rate, and invalidation-before-target by timeframe and regime.',
-      ]}
-    />
-  )
-}
+/* ---------- Backtesting (Forecast Time Machine) ---------- */
+export { BacktestingPage } from './BacktestingPage'
 
+/* ---------- Roadmap pages ---------- */
 export function JournalPage() {
   return (
     <RoadmapShell
