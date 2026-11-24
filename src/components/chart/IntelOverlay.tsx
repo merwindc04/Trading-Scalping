@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, GripVertical, X, Droplets, ShieldAlert, Info, D
 import type { Analysis } from '@/lib/analyze'
 import type { DecisionReport, Factor, MarketSignal, Tone } from '@/lib/engines/decision'
 import { MACRO_FACTORS, type MacroStance } from '@/lib/engines/macro'
+import { MODEL_LABEL } from '@/lib/engines/backtest'
 import { useAppStore } from '@/store/appStore'
 import { ASSETS } from '@/lib/assets'
 import { fmt } from '@/lib/format'
@@ -329,6 +330,7 @@ function Accuracy({ analysis }: { analysis: Analysis }) {
       <KV k="Range calls held" v={pct(o.neutralHit)} />
       <KV k="Brier skill" v={`${o.skill >= 0 ? '+' : ''}${(o.skill * 100).toFixed(1)}%`} tone={o.skill > 0 ? 'bull' : 'caution'} />
       <KV k="Independent samples" v={`≈${Math.round(o.nEff)} (of ${bt.evaluations} overlapping)`} />
+      <KV k="Core model" v={`${MODEL_LABEL[bt.model]} · picked on older data`} />
       <KV k="This reading" v={`${bt.current.label}: ${pct(bt.current.hitRate)} of ≈${Math.round(bt.current.nEff)}`} />
       {!bt.sufficient && <p className="mt-1 text-[9.5px] text-[var(--color-neutral-400)]">{bt.reason}</p>}
     </div>

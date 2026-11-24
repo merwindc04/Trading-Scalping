@@ -8,6 +8,7 @@ import { marketData } from '@/lib/providers/LiveMarketDataProvider'
 import { ASSETS } from '@/lib/assets'
 import { purityScale, scaleCandle } from '@/lib/analyze'
 import { formatSpan } from '@/lib/horizons'
+import { MODEL_LABEL } from '@/lib/engines/backtest'
 import { MIN_HISTORY, replayAt, runTimeMachine, type PerformanceReport, type RateStat, type ReplayResult } from '@/lib/engines/timeMachine'
 import { useAppStore } from '@/store/appStore'
 import { fmt, fmtSigned } from '@/lib/format'
@@ -218,6 +219,9 @@ function ForecastCard({ r, precision, tf }: { r: ReplayResult; precision: number
       <div className="flex items-center justify-between">
         <DirectionPill direction={r.direction} label={`${dirWord(r.direction)} call`} size="lg" />
         <span className="nums text-[11px] text-ink-400">at {fmt(r.price, precision)}</span>
+      </div>
+      <div className="mt-1.5 text-[10.5px] text-ink-500">
+        Model used: <span className="font-semibold text-ink-300">{MODEL_LABEL[r.model]}</span> — chosen from older data only
       </div>
       <div className="mt-3">
         <ProbabilityBar bull={r.probs.bull} neutral={r.probs.neutral} bear={r.probs.bear} />

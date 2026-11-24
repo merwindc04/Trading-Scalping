@@ -2,7 +2,7 @@ import type { Candle, Direction } from '@/types/market'
 import type { TechnicalReport } from './indicators'
 import { atr as atrSeries } from './indicators'
 import type { MarketStructureReport } from './structure'
-import type { BacktestReport } from './backtest'
+import { MODEL_LABEL, type BacktestReport } from './backtest'
 import type { ZoneReport, Zone } from './zones'
 import type { FibReport } from './fibonacci'
 import type { MacroReport } from './macro'
@@ -125,7 +125,7 @@ export function buildDecision(i: DecisionInputs): DecisionReport {
     0.6,
   )
   add('Technical', 'Multi-timeframe', `${i.mtf.alignmentPct}% aligned ${i.mtf.dominant.toLowerCase()}`, dirEffect(i.mtf.dominant), 0.9)
-  add('Technical', 'Validated core model', `${i.backtest.current.label} (${Math.round(i.backtest.coreScore)}/100)`, dirEffect(i.backtest.coreDirection), 0.8)
+  add('Technical', `Validated core (${MODEL_LABEL[i.backtest.model].toLowerCase()})`, `${i.backtest.current.label} (${Math.round(i.backtest.coreScore)}/100)`, dirEffect(i.backtest.coreDirection), 0.8)
 
   add('Structure', 'Swing structure', i.structure.trendLabel, dirEffect(i.structure.trend), 1)
   const lastEv = i.structure.events[i.structure.events.length - 1]

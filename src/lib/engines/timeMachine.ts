@@ -1,5 +1,5 @@
 import type { Candle, Direction } from '@/types/market'
-import { runBacktest } from './backtest'
+import { runBacktest, type CoreModel } from './backtest'
 import { computeIndicators } from './indicators'
 import { analyzeStructure } from './structure'
 import { fibonacci } from './fibonacci'
@@ -47,6 +47,8 @@ export interface ReplayResult {
   sigmaBar: number
   flatBand: number
   coreScore: number
+  /** Core model picked (on older data only) for this replay. */
+  model: CoreModel
   /** Null when the future is not available yet (replay point too recent). */
   outcome: {
     endTime: number
@@ -107,6 +109,7 @@ export function replayAt(full: Candle[], index: number, h: number): ReplayResult
     sigmaBar: bt.sigmaBar,
     flatBand: bt.flatBand,
     coreScore: bt.coreScore,
+    model: bt.model,
   }
 
   const future = full.slice(index + 1, index + 1 + h)
@@ -301,6 +304,8 @@ export function runTimeMachine(full: Candle[], h: number, maxReplays = 140): Per
       { label: 'Bearish calls', stat: rate(dir.filter((r) => r.direction === 'BEARISH').map((r) => r.outcome!.correct), overlap) },
     ],
     byRegime: [
+      { label: 'Trend model', hint: 'calls from the momentum core', stat: rate(dir.filter((r) => r.model === 'trend').map((r) => r.outcome!.correct), overlap) },
+      { label: 'Reversal model', hint: 'calls from snap-back core', stat: rate(dir.filter((r) => r.model === 'reversal').map((r) => r.outcome!.correct), overlap) },
       { label: 'Trending', hint: 'strong core reading', stat: rate(dir.filter(trending).map((r) => r.outcome!.correct), overlap) },
       { label: 'Ranging', hint: 'mild core reading', stat: rate(dir.filter((r) => !trending(r)).map((r) => r.outcome!.correct), overlap) },
       { label: 'High volatility', hint: 'σ above median', stat: rate(dir.filter((r) => r.sigmaBar > medSigma).map((r) => r.outcome!.correct), overlap) },
