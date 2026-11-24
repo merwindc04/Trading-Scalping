@@ -17,21 +17,42 @@ interface Line {
   text: string
 }
 
-const PREFS_KEY = 'aurumpulse-voice'
-const RATES = [0.85, 1, 1.15, 1.3]
+// v2: calm defaults (slower, softer voice) — older saved prefs are ignored so everyone gets them.
+const PREFS_KEY = 'aurumpulse-voice-v2'
+const RATES = [0.8, 0.88, 1, 1.15]
+const DEFAULT_RATE = 0.88
+
+/* Calm delivery: slightly lower pitch, and unhurried pauses between sentences and parts. */
+const CALM_PITCH = 0.94
+const PAUSE_SENTENCE_MS = 550
+const PAUSE_SECTION_MS = 1100
 
 function readPrefs(): { rate: number; voiceURI: string | null } {
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
-    return { rate: RATES.includes(p.rate) ? p.rate : 1, voiceURI: typeof p.voiceURI === 'string' ? p.voiceURI : null }
+    return { rate: RATES.includes(p.rate) ? p.rate : DEFAULT_RATE, voiceURI: typeof p.voiceURI === 'string' ? p.voiceURI : null }
   } catch {
-    return { rate: 1, voiceURI: null }
+    return { rate: DEFAULT_RATE, voiceURI: null }
   }
 }
 
 const synth = typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null
 
-/** English voices, the more natural-sounding ones first. */
+/* Soft, warm voices first. Neural "Natural/Online" voices (Edge: Aria, Jenny, Sonia, Libby…)
+   sound far calmer than the classic desktop ones; then known gentle voices on Chrome/Mac. */
+const SOFT_NAMES = /aria|jenny|sonia|libby|natasha|emma|ava|michelle|clara|maisie|hollie|serena|samantha|karen|moira|tessa|google uk english female|zira/i
+function calmScore(v: SpeechSynthesisVoice): number {
+  const neural = /natural|neural|online/i.test(v.name)
+  const soft = SOFT_NAMES.test(v.name)
+  if (neural && soft) return 0
+  if (neural) return 1
+  if (/google uk english female|samantha|serena|karen|moira|tessa/i.test(v.name)) return 2
+  if (soft) return 3
+  return 4
+}
+export const isCalmVoice = (v: SpeechSynthesisVoice) => calmScore(v) <= 3
+
+/** English voices, the calmest-sounding ones first. */
 function useVoices() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>(() => synth?.getVoices() ?? [])
   useEffect(() => {
@@ -43,8 +64,7 @@ function useVoices() {
   }, [])
   return useMemo(() => {
     const en = voices.filter((v) => v.lang.toLowerCase().startsWith('en'))
-    const score = (v: SpeechSynthesisVoice) => (/natural|neural|online/i.test(v.name) ? 0 : /google/i.test(v.name) ? 1 : 2)
-    return [...en].sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))
+    return [...en].sort((a, b) => calmScore(a) - calmScore(b) || a.name.localeCompare(b.name))
   }, [voices])
 }
 
@@ -100,10 +120,17 @@ export function VoiceNarrator({ analysis, price, onClose }: { analysis: Analysis
       const { rate, voice: v } = speech.current
       const u = new SpeechSynthesisUtterance(list[i].text)
       u.rate = rate
+      u.pitch = CALM_PITCH
+      u.volume = 0.9
       u.lang = v?.lang ?? 'en-GB'
       if (v) u.voice = v
       u.onend = () => {
-        if (run.current === id) speakFrom(list, i + 1)
+        if (run.current !== id) return
+        // A relaxed breath between sentences, a longer one between parts.
+        const gap = list[i + 1] && list[i + 1].section !== list[i].section ? PAUSE_SECTION_MS : PAUSE_SENTENCE_MS
+        window.setTimeout(() => {
+          if (run.current === id) speakFrom(list, i + 1)
+        }, gap / rate)
       }
       u.onerror = (e) => {
         if (run.current === id && e.error !== 'interrupted' && e.error !== 'canceled') setPlaying(false)
@@ -230,7 +257,7 @@ export function VoiceNarrator({ analysis, price, onClose }: { analysis: Analysis
             >
               {RATES.map((r) => (
                 <option key={r} value={r}>
-                  {r}×
+                  {r}×{r === DEFAULT_RATE ? " (calm)" : ""}
                 </option>
               ))}
             </select>
@@ -245,7 +272,11 @@ export function VoiceNarrator({ analysis, price, onClose }: { analysis: Analysis
               >
                 {voices.map((v) => (
                   <option key={v.voiceURI} value={v.voiceURI}>
-                    {v.name.replace(/^(Microsoft|Google)\s+/, '').replace(/\s*-\s*English.*$/, '')} ({v.lang})
+                    {v.name
+                      .replace(/^(Microsoft|Google)\s+/, '')
+                      .replace(/\s*Online \(Natural\)/i, '')
+                      .replace(/\s*-\s*English.*$/, '')}{' '}
+                    ({v.lang}){isCalmVoice(v) ? ' · calm' : ''}
                   </option>
                 ))}
               </select>
@@ -253,6 +284,11 @@ export function VoiceNarrator({ analysis, price, onClose }: { analysis: Analysis
           )}
         </div>
       </div>
+      {synth && voices.length > 0 && !voices.some((v) => /natural|neural|online/i.test(v.name)) && (
+        <p className="px-3 pb-2 text-[10px] leading-snug text-ink-500">
+          Tip: for the softest, most natural voice, open this page in Microsoft Edge (voices like Aria or Jenny) — this browser only has basic voices.
+        </p>
+      )}
       {!synth && <p className="px-3 pb-2 text-[10px] text-[var(--color-neutral-400)]">This browser has no speech voice, so the explanation is shown as captions.</p>}
     </div>
   )
