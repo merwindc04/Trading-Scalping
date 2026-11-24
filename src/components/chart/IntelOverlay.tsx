@@ -32,6 +32,10 @@ const sentTone = (s: DecisionReport['sentiment']): Tone => (s === 'Positive' ? '
 const strengthTone = (s: DecisionReport['strength']): Tone => (s === 'Weak' ? 'neutral' : s === 'Moderate' ? 'caution' : 'bull')
 
 type Section = 'why' | 'invalid' | 'data' | 'accuracy' | 'macro'
+/** Panel size limits (px). Default height fits the content. */
+const DEFAULT_W = 300
+const MIN_W = 240
+const MIN_H = 140
 
 export function IntelOverlay({ analysis, lastTick, recalcReason }: { analysis: Analysis; lastTick: number | null; recalcReason: string | null }) {
   const { intelPanel, setIntelPanel, toggleOverlay, macroView, setMacro, purity } = useAppStore()
@@ -78,6 +82,35 @@ export function IntelOverlay({ analysis, lastTick, recalcReason }: { analysis: A
     drag.current = null
   }
 
+  // ---- resizing (right edge, bottom edge, bottom-right corner) ----
+  const startResize = (dir: 'e' | 's' | 'se') => (e: RPointerEvent<HTMLDivElement>) => {
+    const el = ref.current
+    if (!el) return
+    e.preventDefault()
+    e.stopPropagation()
+    const handle = e.currentTarget
+    handle.setPointerCapture(e.pointerId)
+    const box = el.getBoundingClientRect()
+    const start = { sx: e.clientX, sy: e.clientY, w: box.width, h: box.height }
+    const move = (ev: PointerEvent) => {
+      const parent = el.parentElement!.getBoundingClientRect()
+      const patch: Partial<typeof intelPanel> = {}
+      if (dir !== 's') patch.w = Math.round(clampN(start.w + ev.clientX - start.sx, MIN_W, Math.max(MIN_W, parent.width - intelPanel.x - 4)))
+      if (dir !== 'e') patch.h = Math.round(clampN(start.h + ev.clientY - start.sy, MIN_H, Math.max(MIN_H, parent.height - intelPanel.y - 4)))
+      setIntelPanel(patch)
+    }
+    const end = () => {
+      handle.removeEventListener('pointermove', move)
+      handle.removeEventListener('pointerup', end)
+      handle.removeEventListener('pointercancel', end)
+    }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', end)
+    handle.addEventListener('pointercancel', end)
+  }
+  const resetSize = () => setIntelPanel({ w: undefined, h: undefined })
+  const width = intelPanel.w ?? DEFAULT_W
+
   const age = lastTick ? now - lastTick : Infinity
   const fresh = Number.isFinite(age) ? freshness(age) : 'Stale'
   const session = marketSession(ASSETS[analysis.symbol]?.assetClass ?? 'Metals', new Date(now))
@@ -92,8 +125,14 @@ export function IntelOverlay({ analysis, lastTick, recalcReason }: { analysis: A
   return (
     <div
       ref={ref}
-      className="absolute z-20 flex w-[min(300px,calc(100%-16px))] select-none flex-col overflow-hidden rounded-xl border border-white/[0.08] text-[11px] shadow-[0_18px_50px_-20px_rgba(0,0,0,0.8)]"
-      style={{ left: intelPanel.x, top: intelPanel.y, maxHeight: `calc(100% - ${intelPanel.y + 8}px)`, background: bg, backdropFilter: 'blur(14px) saturate(1.1)', WebkitBackdropFilter: 'blur(14px) saturate(1.1)' }}
+      className="absolute z-20 flex select-none flex-col overflow-hidden rounded-xl border border-white/[0.08] text-[11px] shadow-[0_18px_50px_-20px_rgba(0,0,0,0.8)]"
+      style={{
+        left: intelPanel.x,
+        top: intelPanel.y,
+        width: `min(${width}px, calc(100% - 16px))`,
+        height: !collapsed && intelPanel.h ? `min(${intelPanel.h}px, calc(100% - ${intelPanel.y + 8}px))` : undefined,
+        maxHeight: `calc(100% - ${intelPanel.y + 8}px)`,
+        background: bg, backdropFilter: 'blur(14px) saturate(1.1)', WebkitBackdropFilter: 'blur(14px) saturate(1.1)' }}
       role="region"
       aria-label="Confidence and signal panel"
     >
@@ -313,6 +352,36 @@ export function IntelOverlay({ analysis, lastTick, recalcReason }: { analysis: A
           </div>
         </div>
       )}
+
+      {/* Resize handles — drag the right edge, bottom edge or corner; double-click to reset. */}
+      <div
+        aria-hidden
+        title="Drag to resize · double-click to reset"
+        onPointerDown={startResize('e')}
+        onDoubleClick={resetSize}
+        className="absolute inset-y-3 right-0 w-1.5 cursor-ew-resize touch-none transition-colors hover:bg-gold-400/40"
+      />
+      {!collapsed && (
+        <div
+          aria-hidden
+          title="Drag to resize · double-click to reset"
+          onPointerDown={startResize('s')}
+          onDoubleClick={resetSize}
+          className="absolute inset-x-3 bottom-0 h-1.5 cursor-ns-resize touch-none transition-colors hover:bg-gold-400/40"
+        />
+      )}
+      <div
+        role="separator"
+        aria-label="Resize panel (double-click to reset)"
+        title="Drag to resize · double-click to reset"
+        onPointerDown={startResize(collapsed ? 'e' : 'se')}
+        onDoubleClick={resetSize}
+        className="absolute bottom-0 right-0 flex h-4 w-4 cursor-nwse-resize touch-none items-end justify-end p-[3px] text-ink-500 transition-colors hover:text-gold-300"
+      >
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+          <path d="M7 1L1 7M7 4.5L4.5 7" />
+        </svg>
+      </div>
     </div>
   )
 }

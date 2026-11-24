@@ -15,6 +15,9 @@ export interface IntelPanelState {
   /** Offset from the chart's top-left corner, px (left side = older bars, keeps live price visible). */
   x: number
   y: number
+  /** User-resized width / height in px (unset = default 300 wide, height fits content). */
+  w?: number
+  h?: number
 }
 
 export type NavKey =
