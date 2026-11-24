@@ -128,3 +128,59 @@ export function indicatorVotes(readings: IndicatorReading[]): IndicatorVotes {
     items,
   }
 }
+
+/* ---------------- Drawdown from the all-time high ----------------
+   current drawdown = (ATH − price) ÷ ATH
+   max drawdown     = (ATH − lowest low AFTER the ATH) ÷ ATH
+   recovery needed  = ATH ÷ price − 1   (always larger than the drawdown)
+   Uses intraday highs/lows of daily bars, plus the live price. */
+
+export interface AthDrawdown {
+  ath: number
+  athTime: number
+  /** Lowest low after the all-time high (price itself when it is lower). */
+  low: number
+  lowTime: number
+  currentPct: number
+  maxPct: number
+  bouncePct: number
+  recoveryPct: number
+  /** Where price sits between that low (0) and the ATH (1). */
+  position: number
+  atHigh: boolean
+  sinceTime: number
+}
+
+export function athDrawdown(daily: Candle[], price: number, nowSec: number): AthDrawdown | null {
+  if (daily.length < 30 || !(price > 0)) return null
+  let athIdx = 0
+  for (let i = 1; i < daily.length; i++) if (daily[i].high > daily[athIdx].high) athIdx = i
+  let ath = daily[athIdx].high
+  let athTime = daily[athIdx].time
+  if (price >= ath) {
+    ath = price
+    athTime = nowSec
+  }
+  let low = price
+  let lowTime = nowSec
+  // Start the day AFTER the high: the ATH day's own low may have come before the peak.
+  for (let i = athIdx + 1; i < daily.length; i++) {
+    if (daily[i].time >= athTime && daily[i].low < low) {
+      low = daily[i].low
+      lowTime = daily[i].time
+    }
+  }
+  return {
+    ath,
+    athTime,
+    low,
+    lowTime,
+    currentPct: ((ath - price) / ath) * 100,
+    maxPct: ((ath - low) / ath) * 100,
+    bouncePct: (price / low - 1) * 100,
+    recoveryPct: (ath / price - 1) * 100,
+    position: ath > low ? (price - low) / (ath - low) : 1,
+    atHigh: (ath - price) / ath < 0.001,
+    sinceTime: daily[0].time,
+  }
+}

@@ -4,7 +4,7 @@ import type { Candle } from '@/types/market'
 import type { Analysis } from '@/lib/analyze'
 import { scaleCandle } from '@/lib/analyze'
 import { marketData } from '@/lib/providers/LiveMarketDataProvider'
-import { priceMoves, rangeUse, indicatorVotes } from '@/lib/engines/moveTracker'
+import { priceMoves, rangeUse, indicatorVotes, athDrawdown, type AthDrawdown } from '@/lib/engines/moveTracker'
 import { useSignalTrackStore, favourPct, type SignalTrack } from '@/store/signalTrackStore'
 import { fmt } from '@/lib/format'
 import { fmtAge } from '@/lib/marketStatus'
@@ -42,9 +42,32 @@ export function MoveTrackerPanel({ analysis, price }: { analysis: Analysis; pric
     }
   }, [analysis.symbol, k])
 
+  // Full daily history (up to ~8 years) for the all-time-high drawdown. It comes as raw
+  // feed prices, so it is put on the displayed scale (spot calibration, AED, purity) by
+  // matching one completed day against the scaled daily bars.
+  const [deepRaw, setDeepRaw] = useState<Candle[]>([])
+  useEffect(() => {
+    let alive = true
+    const load = () => marketData.getDeepHistory?.(analysis.symbol, '1D', 3000).then((d) => alive && setDeepRaw(d))
+    load()
+    const id = window.setInterval(load, 10 * 60_000)
+    return () => {
+      alive = false
+      window.clearInterval(id)
+    }
+  }, [analysis.symbol])
+  const deep = useMemo(() => {
+    const ref = daily[daily.length - 2]
+    const raw = ref && deepRaw.find((c) => c.time === ref.time)
+    if (!ref || !raw || !(raw.close > 0)) return []
+    const f = ref.close / raw.close
+    return deepRaw.map((c) => ({ ...c, open: c.open * f, high: c.high * f, low: c.low * f, close: c.close * f }))
+  }, [deepRaw, daily])
+
   const nowSec = Date.now() / 1000
   const moves = useMemo(() => priceMoves(intraday, px, nowSec), [intraday, px])
   const range = useMemo(() => rangeUse(intraday, daily, px, nowSec), [intraday, daily, px])
+  const dd = useMemo(() => athDrawdown(deep, px, nowSec), [deep, px])
   const votes = useMemo(() => indicatorVotes(analysis.technical.readings), [analysis.technical.readings])
   const track = useSignalTracking(analysis, px)
   const p = analysis.precision
@@ -76,6 +99,11 @@ export function MoveTrackerPanel({ analysis, price }: { analysis: Analysis; pric
             </div>
           ))}
         </div>
+      </Section>
+
+      {/* 1b · Drawdown from the all-time high */}
+      <Section title="Down from the all-time high">
+        <AthSection dd={dd} precision={p} />
       </Section>
 
       {/* 2 · How much of a normal day's move is used */}
@@ -261,6 +289,62 @@ function Section({ title, children, last }: { title: string; children: React.Rea
     <div className={last ? '' : 'mb-3 border-b border-white/[0.04] pb-3'}>
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-500">{title}</div>
       {children}
+    </div>
+  )
+}
+
+function AthSection({ dd, precision }: { dd: AthDrawdown | null; precision: number }) {
+  if (!dd) return <p className="text-[10.5px] text-ink-500">Loading long-term history…</p>
+  const day = (t: number) => new Date(t * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  if (dd.atHigh) {
+    return (
+      <p className="text-[11px] font-semibold" style={{ color: BULL }}>
+        At an all-time high — {fmt(dd.ath, precision)} (history since {day(dd.sinceTime)}).
+      </p>
+    )
+  }
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10.5px] text-ink-400">Below the peak of {fmt(dd.ath, precision)}</span>
+        <span className="nums text-[17px] font-bold" style={{ color: BEAR }}>
+          −{dd.currentPct.toFixed(2)}%
+        </span>
+      </div>
+      {/* Lowest low since the peak (left) → all-time high (right), price marker in between */}
+      <div className="relative mt-1.5 h-2.5 w-full rounded-full" style={{ background: `linear-gradient(90deg, color-mix(in oklab, ${BEAR} 45%, transparent), color-mix(in oklab, ${BULL} 45%, transparent))` }}>
+        <span
+          className="absolute -top-1 h-[18px] w-[3px] -translate-x-1/2 rounded-full bg-white shadow"
+          style={{ left: `${Math.max(0, Math.min(1, dd.position)) * 100}%` }}
+          title="Price now"
+        />
+      </div>
+      <div className="nums mt-0.5 flex justify-between text-[9.5px] text-ink-500">
+        <span>Low {fmt(dd.low, precision)}</span>
+        <span>Now</span>
+        <span>High {fmt(dd.ath, precision)}</span>
+      </div>
+      <div className="nums mt-2 grid grid-cols-2 gap-1.5">
+        <Mini label="Deepest fall" value={`−${dd.maxPct.toFixed(2)}%`} tone={BEAR} sub={`low on ${day(dd.lowTime)}`} />
+        <Mini label="Bounce from low" value={signed(dd.bouncePct)} tone={BULL} sub="since that low" />
+        <Mini label="Needed to recover" value={`+${dd.recoveryPct.toFixed(2)}%`} tone={AMBER} sub="to reach the peak" />
+        <Mini label="Peak date" value={day(dd.athTime)} sub="all-time high" />
+      </div>
+      <p className="mt-1.5 text-[9.5px] leading-snug text-ink-500">
+        Uses daily highs/lows since {day(dd.sinceTime)}. A big fall does not mean a bounce is due — it can fall further.
+      </p>
+    </div>
+  )
+}
+
+function Mini({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: string }) {
+  return (
+    <div className="panel-inset px-2 py-1.5">
+      <div className="truncate text-[9px] uppercase tracking-wider text-ink-500">{label}</div>
+      <div className="text-[12px] font-bold" style={{ color: tone ?? 'var(--color-ink-100)' }}>
+        {value}
+      </div>
+      <div className="truncate text-[9px] text-ink-500">{sub}</div>
     </div>
   )
 }
