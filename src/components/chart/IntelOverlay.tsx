@@ -4,6 +4,7 @@ import type { Analysis } from '@/lib/analyze'
 import type { DecisionReport, Factor, MarketSignal, Tone } from '@/lib/engines/decision'
 import { MACRO_FACTORS, type MacroStance } from '@/lib/engines/macro'
 import { MODEL_LABEL } from '@/lib/engines/backtest'
+import { EdgeBadge } from '@/components/ui/EdgeBadge'
 import { useAppStore } from '@/store/appStore'
 import { ASSETS } from '@/lib/assets'
 import { fmt } from '@/lib/format'
@@ -145,6 +146,9 @@ export function IntelOverlay({ analysis, lastTick, recalcReason }: { analysis: A
           >
             {signalLabel}
           </span>
+          <div className="mt-0.5">
+            <EdgeBadge gate={analysis.edgeGate} size="sm" />
+          </div>
         </div>
       </div>
 

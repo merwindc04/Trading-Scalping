@@ -14,6 +14,7 @@ import { groundForecast } from '@/lib/engines/forecast'
 import { fibonacci, type FibReport } from '@/lib/engines/fibonacci'
 import { buildZones, type ZoneReport } from '@/lib/engines/zones'
 import { runBacktest, type BacktestReport } from '@/lib/engines/backtest'
+import { edgeGateCached, type EdgeGate } from '@/lib/engines/edgeGate'
 import { buildMacro, DEFAULT_MACRO_VIEW, type MacroReport, type MacroView } from '@/lib/engines/macro'
 import { buildDecision, type DecisionReport } from '@/lib/engines/decision'
 import { resolveHorizon, type HorizonKey, type ResolvedHorizon } from '@/lib/horizons'
@@ -101,6 +102,8 @@ export interface Analysis {
   fib: FibReport
   zones: ZoneReport
   backtest: BacktestReport
+  /** Did this model's past calls on this market/timeframe/period beat guessing? Gates BUY/SELL. */
+  edgeGate: EdgeGate
   macro: MacroReport
   decision: DecisionReport
   source: SourceInfo
@@ -194,6 +197,9 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
   const source: SourceInfo = marketData.getSourceInfo?.(symbol) ?? { mode: marketData.getStatus(symbol), feeds: [marketData.sourceLabel] }
   const horizon = resolveHorizon(opts.horizon ?? 'auto', timeframe, style)
   const backtest = runBacktest(full, horizon.steps)
+  // Deeper history (up to 3,000 bars) for the proven-edge test; raw feed prices are fine for direction.
+  const deep = marketData.getDeepHistory ? await marketData.getDeepHistory(symbol, timeframe, 3000) : full
+  const edgeGate = edgeGateCached(`${symbol}|${timeframe}|${horizon.steps}`, deep, horizon.steps)
 
   // Directioned pattern strength (bull-positive).
   const patternComponent =
@@ -330,6 +336,7 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     volumeScore: volumeComponent,
     historical,
     backtest,
+    edgeGate,
     zones,
     fib,
     macro,
@@ -399,6 +406,7 @@ export async function analyze(symbol: string, timeframe: Timeframe, style: Tradi
     fib,
     zones,
     backtest,
+    edgeGate,
     macro,
     decision,
     source,

@@ -60,6 +60,7 @@ const FETCH_TIMEOUT_MS = 7000
 const GOLD_API = 'https://api.gold-api.com/price/XAU'
 const SPOT_TTL_MS = 20000
 const PAXG = 'PAXGUSDT'
+const DEEP_TTL_MS = 10 * 60 * 1000
 
 export class LiveMarketDataProvider implements MarketDataProvider {
   readonly sourceLabel = 'LIVE · spot-calibrated gold'
@@ -73,6 +74,8 @@ export class LiveMarketDataProvider implements MarketDataProvider {
   private xauInflight: Promise<number | null> | null = null
   // Per-symbol multiplier that shifts PAXG onto true XAU spot (applied to ticks too).
   private spotCal = new Map<string, number>()
+  // Deep (paged) history for edge testing, keyed by Binance symbol.
+  private deepCache = new Map<string, { t: number; candles: Candle[] }>()
 
   constructor(demo: DemoMarketDataProvider) {
     this.demo = demo
@@ -177,6 +180,40 @@ export class LiveMarketDataProvider implements MarketDataProvider {
       // Region block, offline, rate-limit — degrade gracefully to demo.
       this.status.set(symbol, 'demo')
       return this.demo.getHistory(symbol, timeframe, count)
+    }
+  }
+
+  /** Up to `bars` closed+forming candles by paging the REST endpoint backwards. Cached 10 min. */
+  async getDeepHistory(symbol: string, timeframe: Timeframe, bars: number): Promise<Candle[]> {
+    const mapped = SYMBOL_MAP[symbol]
+    if (!mapped) return this.getHistory(symbol, timeframe, Math.min(bars, 1000))
+    const key = `${mapped.binance}|${timeframe}|${bars}`
+    const hit = this.deepCache.get(key)
+    if (hit && Date.now() - hit.t < DEEP_TTL_MS) return hit.candles
+    try {
+      let rows: unknown[][] = []
+      let end: number | undefined
+      while (rows.length < bars) {
+        const url = `${REST}?symbol=${mapped.binance}&interval=${INTERVAL_MAP[timeframe]}&limit=1000${end ? `&endTime=${end}` : ''}`
+        const page = (await fetchJSON(url)) as unknown[][]
+        if (!page.length) break
+        rows = page.concat(rows)
+        end = Number(page[0][0]) - 1
+        if (page.length < 1000) break
+      }
+      const candles: Candle[] = rows.slice(-bars).map((k) => ({
+        time: Math.floor(Number(k[0]) / 1000),
+        open: Number(k[1]),
+        high: Number(k[2]),
+        low: Number(k[3]),
+        close: Number(k[4]),
+        volume: Number(k[5]),
+      }))
+      if (candles.length < 20) throw new Error('insufficient deep history')
+      this.deepCache.set(key, { t: Date.now(), candles })
+      return candles
+    } catch {
+      return this.getHistory(symbol, timeframe, Math.min(bars, 1000))
     }
   }
 

@@ -3,6 +3,7 @@ import type { TechnicalReport } from './indicators'
 import { atr as atrSeries } from './indicators'
 import type { MarketStructureReport } from './structure'
 import { MODEL_LABEL, type BacktestReport } from './backtest'
+import type { EdgeGate } from './edgeGate'
 import type { ZoneReport, Zone } from './zones'
 import type { FibReport } from './fibonacci'
 import type { MacroReport } from './macro'
@@ -78,6 +79,8 @@ export interface DecisionReport {
 }
 
 export interface DecisionInputs {
+  /** Proven-edge gate: BUY/SELL only when the model's past calls here beat guessing. */
+  edgeGate: EdgeGate
   candles: Candle[]
   timeframeLabel: string
   horizonLabel: string
@@ -211,7 +214,8 @@ export function buildDecision(i: DecisionInputs): DecisionReport {
     const fakeOut = z.events.some((e) => e.kind === (buy ? 'false-breakout' : 'false-breakdown'))
     const problems: string[] = []
     if ((confidence ?? 0) < 52) problems.push(`validated confidence ${confidence}% is below 52%`)
-    if (edge <= 0) problems.push('no out-of-sample edge over the base rate')
+    if (!i.edgeGate.allows) problems.push(i.edgeGate.status === 'INSUFFICIENT' ? 'too little history to prove an edge here' : `no proven edge here (past calls right ${Math.round(i.edgeGate.hitRate * 100)}% vs ${Math.round(i.edgeGate.baseline * 100)}% by guessing)`)
+    else if (edge <= 0) problems.push('no out-of-sample edge over the base rate')
     if (conflictRatio >= 0.4) problems.push(`${Math.round(conflictRatio * 100)}% of the evidence conflicts`)
     if (fakeOut) problems.push(`a recent ${buy ? 'false breakout' : 'false breakdown'} argues against it`)
     if (problems.length) {
@@ -219,7 +223,7 @@ export function buildDecision(i: DecisionInputs): DecisionReport {
       signalReason = `${buy ? 'Bullish' : 'Bearish'} lean, but ${problems.join('; ')}. Confirmation: a close ${buy ? 'above' : 'below'} ${f(buy ? z.confirmation.bull : z.confirmation.bear)}.`
     } else {
       signal = i.signalAction
-      signalReason = `${buy ? 'Bullish' : 'Bearish'} read with ${confidence}% validated confidence and a positive out-of-sample edge (+${(edge * 100).toFixed(1)} pts).`
+      signalReason = `${buy ? 'Bullish' : 'Bearish'} read with ${confidence}% validated confidence. ${i.edgeGate.label}: ${i.edgeGate.reason}`
     }
   } else if (i.bias === 'NEUTRAL') {
     signal = 'HOLD'

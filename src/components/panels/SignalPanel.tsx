@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown, PauseCircle, Check, X, BellRing, BellOff, Zap, SlidersHorizontal } from 'lucide-react'
 import type { Analysis } from '@/lib/analyze'
 import type { SignalAction } from '@/lib/engines/signal'
+import { EdgeLine } from '@/components/ui/EdgeBadge'
 import { useAppStore } from '@/store/appStore'
 import { fmt, fmtSigned } from '@/lib/format'
 
@@ -52,6 +53,11 @@ export function SignalPanel({ analysis }: { analysis: Analysis }) {
           </div>
           <p className="text-[11px] text-ink-400">{s.subline}</p>
         </div>
+      </div>
+
+      {/* Proven-edge gate */}
+      <div className="mx-3.5 mt-2.5">
+        <EdgeLine gate={analysis.edgeGate} />
       </div>
 
       {/* Timing callout */}

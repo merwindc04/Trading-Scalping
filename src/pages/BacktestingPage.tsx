@@ -4,6 +4,7 @@ import type { Candle, Direction, Timeframe } from '@/types/market'
 import { TIMEFRAME_SECONDS } from '@/types/market'
 import { Panel, ProbabilityBar, DirectionPill, Stat, Sparkline } from '@/components/ui/primitives'
 import { ReplayChart } from '@/components/chart/ReplayChart'
+import { EdgeFinder } from '@/components/panels/EdgeFinder'
 import { marketData } from '@/lib/providers/LiveMarketDataProvider'
 import { ASSETS } from '@/lib/assets'
 import { purityScale, scaleCandle } from '@/lib/analyze'
@@ -201,6 +202,9 @@ export function BacktestingPage() {
                 {replay && <OutcomeCard r={replay} precision={asset.precision} revealed={revealed} onReveal={() => setRevealed((v) => !v)} />}
               </div>
             </div>
+
+            {/* Where does the model have a proven edge? */}
+            <EdgeFinder symbol={symbol} />
 
             {/* Performance */}
             <PerformancePanel perf={perf} busy={perfBusy} tf={tf} h={h} onPick={(i) => go(i)} />

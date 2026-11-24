@@ -48,6 +48,13 @@ export interface MarketDataProvider {
   /** Return `count` historical candles ending at (or near) now. */
   getHistory(symbol: string, timeframe: Timeframe, count: number): Promise<Candle[]>
 
+  /**
+   * Optional: deeper history than `getHistory` (which caps at ~1000 bars),
+   * used to judge whether the model's edge is statistically real. Prices are
+   * raw feed prices — fine for direction scoring, not for display.
+   */
+  getDeepHistory?(symbol: string, timeframe: Timeframe, bars: number): Promise<Candle[]>
+
   /** Latest quote snapshot. */
   getQuote(symbol: string): Promise<Quote>
 
