@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Maximize2, Minimize2, Layers, TrendingUp, Ruler, Activity, Sparkles, Ghost, Waves, Target, Gauge, Spline, CandlestickChart, LineChart } from 'lucide-react'
+import { Maximize2, Minimize2, Layers, TrendingUp, Ruler, Activity, Sparkles, Ghost, Waves, Target, Gauge, Spline, CandlestickChart, LineChart, Volume2 } from 'lucide-react'
 import { IntelOverlay } from './IntelOverlay'
+import { VoiceNarrator } from './VoiceNarrator'
 import { HORIZONS, type HorizonKey } from '@/lib/horizons'
 import type { Purity } from '@/store/appStore'
 import type { Analysis } from '@/lib/analyze'
@@ -46,6 +47,7 @@ export function ChartCard({
 }) {
   const { overlays, toggleOverlay, scenarioView, symbol, timeframe, setTimeframe, style, setStyle, horizon, setHorizon, chartType, setChartType, purity, setPurity } = useAppStore()
   const [full, setFull] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
 
   const changePct = analysis?.changePct ?? 0
   const up = changePct >= 0
@@ -115,6 +117,16 @@ export function ChartCard({
               )
             })}
           </div>
+          <button
+            onClick={() => setVoiceOpen((v) => !v)}
+            disabled={!analysis}
+            className={`btn !px-2 ${voiceOpen ? '!border-gold-400/40 !text-gold-200' : ''}`}
+            title="Explain this chart out loud"
+            aria-pressed={voiceOpen}
+          >
+            <Volume2 size={14} />
+            <span className="hidden text-[11px] font-medium xl:inline">Explain</span>
+          </button>
           <button onClick={() => setFull((v) => !v)} className="btn !px-2" title="Fullscreen">
             {full ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
@@ -187,6 +199,7 @@ export function ChartCard({
       <div className="relative flex-1">
         <TradingChart analysis={analysis} liveCandle={liveCandle} overlays={overlays} scenarioView={scenarioView} chartType={chartType} />
         {analysis && overlays.intel && <IntelOverlay analysis={analysis} lastTick={lastTick} recalcReason={recalcReason} />}
+        {analysis && voiceOpen && <VoiceNarrator analysis={analysis} price={price} onClose={() => setVoiceOpen(false)} />}
         {/* Legend */}
         <div className="pointer-events-none absolute left-3 top-2.5 flex flex-col gap-1 text-[9.5px]">
           <LegendRow color="#35b47f" label="Actual market (live)" solid />
