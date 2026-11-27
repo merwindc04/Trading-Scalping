@@ -4,6 +4,7 @@ import { Watchlist } from '@/components/layout/Watchlist'
 import { ChartCard } from '@/components/chart/ChartCard'
 import { SignalPanel } from '@/components/panels/SignalPanel'
 import { ChecklistPanel } from '@/components/panels/ChecklistPanel'
+import { EntryConfirmPanel } from '@/components/panels/EntryConfirmPanel'
 import { MoveTrackerPanel } from '@/components/panels/MoveTrackerPanel'
 import { MarketStrengthPanel } from '@/components/panels/MarketStrengthPanel'
 import { ScenarioPanel } from '@/components/panels/ScenarioPanel'
@@ -110,6 +111,7 @@ export function Dashboard({ live }: { live: LiveState }) {
             {analysis && (
               <>
                 <ChecklistPanel analysis={analysis} price={price} />
+                <EntryConfirmPanel analysis={analysis} price={price} />
                 <SignalPanel analysis={analysis} />
                 <MoveTrackerPanel analysis={analysis} price={price} />
                 <MarketStrengthPanel analysis={analysis} />
